@@ -33,7 +33,8 @@ public class Main {
                 "    '[]': { "                                               + "\r\n" +
                 "        'table1': { "                                       + "\r\n" +
                 "            '@column': 'code,name', "                       + "\r\n" +
-                "            'code': 'C86L' "                                + "\r\n" +
+                "            'code': 'C86L', "                               + "\r\n" +
+                "            'name': 'name' "                                + "\r\n" +
                 "        }, "                                                + "\r\n" +
                 "        'table2:t2': {"                                     + "\r\n" +
                 "            '@column': 'id,docno'"                          + "\r\n" +

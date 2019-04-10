@@ -1,9 +1,7 @@
 package zuo.biao.apijson.parser.core;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 
 public class SQLExplorer {
     private static final String AND = ") AND (";
@@ -21,12 +19,11 @@ public class SQLExplorer {
         if (!sqlProvider.getMessage().getErrors().isEmpty()) {
             throw new SQLProviderException(sqlProvider.getMessage().getErrors());
         }
-        return sql.sql();
+
+        return sql.assemblySQL();
     }
 
-    /***
-     *  将提供器提供的数据刷新到SQLStatement中
-     */
+    /*** 将提供器提供的数据刷新到SQLStatement中 */
     private void feedSQLStatement() {
         sql = new SQLStatement();
         if (sqlProvider.getStatementType() == null) {
@@ -35,7 +32,6 @@ public class SQLExplorer {
 
         sql.statementType = sqlProvider.getStatementType();                       /** StatementType表示要生成的是SELECT,INSERT,UPDATE,DLEETE中的哪种 */
         sql.updateFields.addAll(ofNullable(sqlProvider.getUpdateFields()));       /** StatementType为UPDATE时 UPDATE要更新的字段 */
-//        List<String> list = sqlProvider.getSelectFields();
         sql.selectFields.addAll(ofNullable(sqlProvider.getSelectFields()));       /** StatementType为SELECT时 SELECT要查询的字段 */
         sql.tables.addAll(ofNullable(sqlProvider.getTables()));                   /** StatementType所有类型都将使用这个方法 SQL所涉及的表 */
         sql.join.addAll(ofNullable(sqlProvider.getJoin()));
@@ -52,47 +48,12 @@ public class SQLExplorer {
         sql.values.addAll(ofNullable(sqlProvider.getValues()));
     }
 
-    public SQLProvider getSqlProvider() {
-        return sqlProvider;
-    }
-
-    public void setSqlProvider(SQLProvider sqlProvider) {
-        this.sqlProvider = sqlProvider;
-    }
-
     private List<String> ofNullable(List<String> list) {
         if (list == null) {
             return new ArrayList();
         }
         return list;
     }
-
-//    private static class SafeAppendable {
-//        private final Appendable a;
-//        private boolean empty = true;
-//
-//        public SafeAppendable(Appendable a) {
-//            super();
-//            this.a = a;
-//        }
-//
-//        public SafeAppendable append(CharSequence s) {
-//            try {
-//                if (empty && s.length() > 0) {
-//                    empty = false;
-//                }
-//                a.append(s);
-//            } catch (IOException e) {
-//                throw new RuntimeException(e);
-//            }
-//            return this;
-//        }
-//
-//        public boolean isEmpty() {
-//            return empty;
-//        }
-//
-//    }
 
     private static class SQLStatement {
 
@@ -113,16 +74,15 @@ public class SQLExplorer {
         private List<String> columns = new ArrayList();
         private List<String> values = new ArrayList();
         private boolean distinct;
+        private StringBuffer builder = new StringBuffer();
 
         public SQLStatement() {
             // Prevent Synthetic Access
         }
 
-        private void sqlClause(StringBuffer builder, String keyword, List<String> parts, String open, String close, String conjunction) {
+        private void sqlClause(String keyword, List<String> parts, String open, String close, String conjunction) {
             if (!parts.isEmpty()) {
-                if (builder!=null) {
-                    builder.append("\n");
-                }
+                builder.append("\n");
                 builder.append(keyword);
                 builder.append(" ");
                 builder.append(open);
@@ -140,55 +100,51 @@ public class SQLExplorer {
         }
 
         private String selectSQL() {
-            StringBuffer builder = new StringBuffer();
             if (distinct) {
-                sqlClause(builder, "SELECT DISTINCT", selectFields, "", "", ", ");
+                sqlClause("SELECT DISTINCT", selectFields, "", "", ", ");
             } else {
-                sqlClause(builder, "SELECT", selectFields, "", "", ", ");
+                sqlClause("SELECT", selectFields, "", "", ", ");
             }
 
-            sqlClause(builder, "FROM", tables, "", "", ", ");
-            joins(builder);
-            sqlClause(builder, "WHERE", where, "(", ")", " AND ");
-            sqlClause(builder, "GROUP BY", groupBy, "", "", ", ");
-            sqlClause(builder, "HAVING", having, "(", ")", " AND ");
-            sqlClause(builder, "ORDER BY", orderBy, "", "", ", ");
+            sqlClause("FROM", tables, "", "", ", ");
+            joins();
+            sqlClause("WHERE", where, "(", ")", " AND ");
+            sqlClause("GROUP BY", groupBy, "", "", ", ");
+            sqlClause("HAVING", having, "(", ")", " AND ");
+            sqlClause("ORDER BY", orderBy, "", "", ", ");
             return builder.toString();
         }
 
-        private void joins(StringBuffer builder) {
-            sqlClause(builder, "JOIN", join, "", "", "\nJOIN ");
-            sqlClause(builder, "INNER JOIN", innerJoin, "", "", "\nINNER JOIN ");
-            sqlClause(builder, "OUTER JOIN", outerJoin, "", "", "\nOUTER JOIN ");
-            sqlClause(builder, "LEFT OUTER JOIN", leftOuterJoin, "", "", "\nLEFT OUTER JOIN ");
-            sqlClause(builder, "RIGHT OUTER JOIN", rightOuterJoin, "", "", "\nRIGHT OUTER JOIN ");
+        private void joins() {
+            sqlClause("JOIN", join, "", "", "\nJOIN ");
+            sqlClause("INNER JOIN", innerJoin, "", "", "\nINNER JOIN ");
+            sqlClause("OUTER JOIN", outerJoin, "", "", "\nOUTER JOIN ");
+            sqlClause("LEFT OUTER JOIN", leftOuterJoin, "", "", "\nLEFT OUTER JOIN ");
+            sqlClause("RIGHT OUTER JOIN", rightOuterJoin, "", "", "\nRIGHT OUTER JOIN ");
         }
 
         private String insertSQL() {
-            StringBuffer builder = new StringBuffer();
-            sqlClause(builder, "INSERT INTO", tables, "", "", "");
-            sqlClause(builder, "", columns, "(", ")", ", ");
-            sqlClause(builder, "VALUES", values, "(", ")", ", ");
+            sqlClause("INSERT INTO", tables, "", "", "");
+            sqlClause("", columns, "(", ")", ", ");
+            sqlClause("VALUES", values, "(", ")", ", ");
             return builder.toString();
         }
 
         private String deleteSQL() {
-            StringBuffer builder = new StringBuffer();
-            sqlClause(builder, "DELETE FROM", tables, "", "", "");
-            sqlClause(builder, "WHERE", where, "(", ")", " AND ");
+            sqlClause("DELETE FROM", tables, "", "", "");
+            sqlClause("WHERE", where, "(", ")", " AND ");
             return builder.toString();
         }
 
         private String updateSQL() {
-            StringBuffer builder = new StringBuffer();
-            sqlClause(builder, "UPDATE", tables, "", "", "");
-            joins(builder);
-            sqlClause(builder, "SET", updateFields, "", "", ", ");
-            sqlClause(builder, "WHERE", where, "(", ")", " AND ");
+            sqlClause("UPDATE", tables, "", "", "");
+            joins();
+            sqlClause("SET", updateFields, "", "", ", ");
+            sqlClause("WHERE", where, "(", ")", " AND ");
             return builder.toString();
         }
 
-        public String sql() {
+        public String assemblySQL() {
             if (statementType == null) {
                 return null;
             }
