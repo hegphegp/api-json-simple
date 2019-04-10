@@ -3,6 +3,7 @@ package zuo.biao.apijson.parser.core;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 public class SQLExplorer {
     private static final String AND = ") AND (";
@@ -20,9 +21,7 @@ public class SQLExplorer {
         if (!sqlProvider.getMessage().getErrors().isEmpty()) {
             throw new SQLProviderException(sqlProvider.getMessage().getErrors());
         }
-        StringBuffer sb = new StringBuffer();
-        sql.sql(sb);
-        return sb.toString();
+        return sql.sql();
     }
 
     /***
@@ -68,32 +67,32 @@ public class SQLExplorer {
         return list;
     }
 
-    private static class SafeAppendable {
-        private final Appendable a;
-        private boolean empty = true;
-
-        public SafeAppendable(Appendable a) {
-            super();
-            this.a = a;
-        }
-
-        public SafeAppendable append(CharSequence s) {
-            try {
-                if (empty && s.length() > 0) {
-                    empty = false;
-                }
-                a.append(s);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-            return this;
-        }
-
-        public boolean isEmpty() {
-            return empty;
-        }
-
-    }
+//    private static class SafeAppendable {
+//        private final Appendable a;
+//        private boolean empty = true;
+//
+//        public SafeAppendable(Appendable a) {
+//            super();
+//            this.a = a;
+//        }
+//
+//        public SafeAppendable append(CharSequence s) {
+//            try {
+//                if (empty && s.length() > 0) {
+//                    empty = false;
+//                }
+//                a.append(s);
+//            } catch (IOException e) {
+//                throw new RuntimeException(e);
+//            }
+//            return this;
+//        }
+//
+//        public boolean isEmpty() {
+//            return empty;
+//        }
+//
+//    }
 
     private static class SQLStatement {
 
@@ -119,9 +118,9 @@ public class SQLExplorer {
             // Prevent Synthetic Access
         }
 
-        private void sqlClause(SafeAppendable builder, String keyword, List<String> parts, String open, String close, String conjunction) {
+        private void sqlClause(StringBuffer builder, String keyword, List<String> parts, String open, String close, String conjunction) {
             if (!parts.isEmpty()) {
-                if (!builder.isEmpty()) {
+                if (builder!=null) {
                     builder.append("\n");
                 }
                 builder.append(keyword);
@@ -140,7 +139,8 @@ public class SQLExplorer {
             }
         }
 
-        private String selectSQL(SafeAppendable builder) {
+        private String selectSQL() {
+            StringBuffer builder = new StringBuffer();
             if (distinct) {
                 sqlClause(builder, "SELECT DISTINCT", selectFields, "", "", ", ");
             } else {
@@ -156,7 +156,7 @@ public class SQLExplorer {
             return builder.toString();
         }
 
-        private void joins(SafeAppendable builder) {
+        private void joins(StringBuffer builder) {
             sqlClause(builder, "JOIN", join, "", "", "\nJOIN ");
             sqlClause(builder, "INNER JOIN", innerJoin, "", "", "\nINNER JOIN ");
             sqlClause(builder, "OUTER JOIN", outerJoin, "", "", "\nOUTER JOIN ");
@@ -164,20 +164,23 @@ public class SQLExplorer {
             sqlClause(builder, "RIGHT OUTER JOIN", rightOuterJoin, "", "", "\nRIGHT OUTER JOIN ");
         }
 
-        private String insertSQL(SafeAppendable builder) {
+        private String insertSQL() {
+            StringBuffer builder = new StringBuffer();
             sqlClause(builder, "INSERT INTO", tables, "", "", "");
             sqlClause(builder, "", columns, "(", ")", ", ");
             sqlClause(builder, "VALUES", values, "(", ")", ", ");
             return builder.toString();
         }
 
-        private String deleteSQL(SafeAppendable builder) {
+        private String deleteSQL() {
+            StringBuffer builder = new StringBuffer();
             sqlClause(builder, "DELETE FROM", tables, "", "", "");
             sqlClause(builder, "WHERE", where, "(", ")", " AND ");
             return builder.toString();
         }
 
-        private String updateSQL(SafeAppendable builder) {
+        private String updateSQL() {
+            StringBuffer builder = new StringBuffer();
             sqlClause(builder, "UPDATE", tables, "", "", "");
             joins(builder);
             sqlClause(builder, "SET", updateFields, "", "", ", ");
@@ -185,36 +188,23 @@ public class SQLExplorer {
             return builder.toString();
         }
 
-        public String sql(Appendable a) {
-            SafeAppendable builder = new SafeAppendable(a);
+        public String sql() {
             if (statementType == null) {
                 return null;
             }
 
-            String answer;
-
             switch (statementType) {
                 case DELETE:
-                    answer = deleteSQL(builder);
-                    break;
-
+                    return deleteSQL();
                 case INSERT:
-                    answer = insertSQL(builder);
-                    break;
-
+                    return insertSQL();
                 case SELECT:
-                    answer = selectSQL(builder);
-                    break;
-
+                    return selectSQL();
                 case UPDATE:
-                    answer = updateSQL(builder);
-                    break;
-
-                default:
-                    answer = null;
+                    return updateSQL();
             }
 
-            return answer;
+            return null;
         }
     }
 }

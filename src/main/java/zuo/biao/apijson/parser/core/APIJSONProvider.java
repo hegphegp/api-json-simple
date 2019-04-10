@@ -24,13 +24,6 @@ public class APIJSONProvider extends SQLProvider {
     private JSONObject request;
     private JSONObject join;
 
-    /*
-     * ==================================
-     *              通用逻辑
-     * ==================================
-     * 所有操作都会涉及到的内容
-     */
-
     /** 传入的参数应该是一个通过验证的APIJSON请求 */
     public APIJSONProvider(JSONObject obj) {
         if (obj == null) {
