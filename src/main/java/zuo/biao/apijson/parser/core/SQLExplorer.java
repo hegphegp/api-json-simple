@@ -34,11 +34,11 @@ public class SQLExplorer {
             return;
         }
 
-        sql.statementType = sqlProvider.getStatementType();                    /** StatementType表示要生成的是SELECT,INSERT,UPDATE,DLEETE中的哪种 */
-        sql.sets.addAll(ofNullable(sqlProvider.getSets()));                    /** StatementType为UPDATE时 UPDATE要更新的字段 */
-        List<String> list = sqlProvider.getSelect();
-        sql.select.addAll(ofNullable(sqlProvider.getSelect()));                /** StatementType为SELECT时 SELECT要查询的字段 */
-        sql.tables.addAll(ofNullable(sqlProvider.getTables()));                /** StatementType所有类型都将使用这个方法 SQL所涉及的表 */
+        sql.statementType = sqlProvider.getStatementType();                       /** StatementType表示要生成的是SELECT,INSERT,UPDATE,DLEETE中的哪种 */
+        sql.updateFields.addAll(ofNullable(sqlProvider.getUpdateFields()));       /** StatementType为UPDATE时 UPDATE要更新的字段 */
+//        List<String> list = sqlProvider.getSelectFields();
+        sql.selectFields.addAll(ofNullable(sqlProvider.getSelectFields()));       /** StatementType为SELECT时 SELECT要查询的字段 */
+        sql.tables.addAll(ofNullable(sqlProvider.getTables()));                   /** StatementType所有类型都将使用这个方法 SQL所涉及的表 */
         sql.join.addAll(ofNullable(sqlProvider.getJoin()));
         sql.innerJoin.addAll(ofNullable(sqlProvider.getInnerJoin()));
         sql.outerJoin.addAll(ofNullable(sqlProvider.getOuterJoin()));
@@ -98,8 +98,8 @@ public class SQLExplorer {
     private static class SQLStatement {
 
         private StatementType statementType;
-        private List<String> sets = new ArrayList();
-        private List<String> select = new ArrayList();
+        private List<String> updateFields = new ArrayList();
+        private List<String> selectFields = new ArrayList();
         private List<String> tables = new ArrayList();
         private List<String> join = new ArrayList();
         private List<String> innerJoin = new ArrayList();
@@ -142,9 +142,9 @@ public class SQLExplorer {
 
         private String selectSQL(SafeAppendable builder) {
             if (distinct) {
-                sqlClause(builder, "SELECT DISTINCT", select, "", "", ", ");
+                sqlClause(builder, "SELECT DISTINCT", selectFields, "", "", ", ");
             } else {
-                sqlClause(builder, "SELECT", select, "", "", ", ");
+                sqlClause(builder, "SELECT", selectFields, "", "", ", ");
             }
 
             sqlClause(builder, "FROM", tables, "", "", ", ");
@@ -180,7 +180,7 @@ public class SQLExplorer {
         private String updateSQL(SafeAppendable builder) {
             sqlClause(builder, "UPDATE", tables, "", "", "");
             joins(builder);
-            sqlClause(builder, "SET", sets, "", "", ", ");
+            sqlClause(builder, "SET", updateFields, "", "", ", ");
             sqlClause(builder, "WHERE", where, "(", ")", " AND ");
             return builder.toString();
         }

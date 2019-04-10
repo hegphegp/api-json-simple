@@ -1,91 +1,226 @@
 package zuo.biao.apijson.parser.core;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
  * 实现这个接口提供SQLBuilder获取构造SQL语句所需要的数据
  */
-public interface SQLProvider {
+public class SQLProvider {
+    private StatementType statementType;
+    private List<String> updateFields = new ArrayList();
+    private List<String> selectFields = new ArrayList();
+    private List<String> tables = new ArrayList();
+    private List<String> join = new ArrayList();
+    private List<String> innerJoin = new ArrayList();
+    private List<String> outerJoin = new ArrayList();
+    private List<String> leftOuterJoin = new ArrayList();
+    private List<String> rightOuterJoin = new ArrayList();
+    private List<String> where = new ArrayList();
+    private List<String> having = new ArrayList();
+    private List<String> groupBy = new ArrayList();
+    private List<String> orderBy = new ArrayList();
+    private List<String> lastList = new ArrayList();
+    private List<String> columns = new ArrayList();
+    private List<String> values = new ArrayList();
+    private boolean distinct;
+
+    private Message message = new Message();
+
     /**
      * 消息类，如果Provider中有异常，通过这个方法可以传递消息
      * @return
      */
-    Message getMessage();
+    public Message getMessage() {
+        return message;
+    }
+
+    /**
+     * 接收错误消息
+     * @param err
+     */
+    public void error(String err) {
+        StackTraceElement ste = new Throwable().getStackTrace()[1];
+        this.message.error(err, ste);
+    }
 
     /**
      * StatementType表示要生成的是SELECT,INSERT,UPDATE,DLEETE中的哪种
      * @return StatementType
      */
-    StatementType getStatementType();
+    public StatementType getStatementType() {
+        return statementType;
+    }
 
-    /**
-     * StatementType为SELECT时
-     * SELECT要查询的字段
-     * @return List<String>
-     */
-    List<String> getSelect();
+    public void setStatementType(StatementType statementType) {
+        this.statementType = statementType;
+    }
 
     /**
      * StatementType为UPDATE时
      * UPDATE要更新的字段
      * @return List<String>
      */
-    List<String> getSets();
+    public List<String> getUpdateFields() {
+        return updateFields;
+    }
+
+    /**
+     * StatementType为SELECT时
+     * SELECT要查询的字段
+     * @return List<String>
+     */
+    public List<String> getSelectFields() {
+        return selectFields;
+    }
 
     /**
      * StatementType所有类型都将使用这个方法
      * SQL所涉及的表
      * @return
      */
-    List<String> getTables();
+    public List<String> getTables() {
+        return tables;
+    }
 
-    List<String> getJoin();
+    public List<String> getJoin() {
+        return join;
+    }
 
-    List<String> getInnerJoin();
+    public List<String> getInnerJoin() {
+        return innerJoin;
+    }
 
-    List<String> getOuterJoin();
+    public List<String> getOuterJoin() {
+        return outerJoin;
+    }
 
-    List<String> getLeftOuterJoin();
+    public List<String> getLeftOuterJoin() {
+        return leftOuterJoin;
+    }
 
-    List<String> getRightOuterJoin();
+    public List<String> getRightOuterJoin() {
+        return rightOuterJoin;
+    }
 
     /**
      * SQL过滤条件
      * @return
      */
-    List<String> getWhere();
+    public List<String> getWhere() {
+        return where;
+    }
 
-    List<String> getHaving();
+    public List<String> getHaving() {
+        return having;
+    }
 
     /**
      * StatementType为SELECT时
      * SQL查询时的分组
      * @return
      */
-    List<String> getGroupBy();
+    public List<String> getGroupBy() {
+        return groupBy;
+    }
 
     /**
      * StatementType为SELECT时
      * SQL查询时的排序
      * @return
      */
-    List<String> getOrderBy();
+    public List<String> getOrderBy() {
+        return orderBy;
+    }
 
-    List<String> getLastList();
+    public List<String> getLastList() {
+        return lastList;
+    }
 
     /**
      * StatementType为INSERT时
      * SQL新增的字段
      * @return
      */
-    List<String> getColumns();
+    public List<String> getColumns() {
+        return columns;
+    }
 
     /**
      * StatementType为INSERT时
      * SQL新增字段所对应的值
      * @return
      */
-    List<String> getValues();
+    public List<String> getValues() {
+        return values;
+    }
 
-    boolean isDistinct();
+    public boolean isDistinct() {
+        return distinct;
+    }
+
+    public void setUpdateFields(List<String> updateFields) {
+        this.updateFields = updateFields;
+    }
+
+    public void setSelectFields(List<String> selectFields) {
+        this.selectFields = selectFields;
+    }
+
+    public void setTables(List<String> tables) {
+        this.tables = tables;
+    }
+
+    public void setJoin(List<String> join) {
+        this.join = join;
+    }
+
+    public void setInnerJoin(List<String> innerJoin) {
+        this.innerJoin = innerJoin;
+    }
+
+    public void setOuterJoin(List<String> outerJoin) {
+        this.outerJoin = outerJoin;
+    }
+
+    public void setLeftOuterJoin(List<String> leftOuterJoin) {
+        this.leftOuterJoin = leftOuterJoin;
+    }
+
+    public void setRightOuterJoin(List<String> rightOuterJoin) {
+        this.rightOuterJoin = rightOuterJoin;
+    }
+
+    public void setWhere(List<String> where) {
+        this.where = where;
+    }
+
+    public void setHaving(List<String> having) {
+        this.having = having;
+    }
+
+    public void setGroupBy(List<String> groupBy) {
+        this.groupBy = groupBy;
+    }
+
+    public void setOrderBy(List<String> orderBy) {
+        this.orderBy = orderBy;
+    }
+
+    public void setLastList(List<String> lastList) {
+        this.lastList = lastList;
+    }
+
+    public void setColumns(List<String> columns) {
+        this.columns = columns;
+    }
+
+    public void setValues(List<String> values) {
+        this.values = values;
+    }
+
+    public void setDistinct(boolean distinct) {
+        this.distinct = distinct;
+    }
+
 }

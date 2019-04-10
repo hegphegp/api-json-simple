@@ -8,7 +8,7 @@ import java.util.Set;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 
-public class APIJSONProvider extends AbstractProvider {
+public class APIJSONProvider extends SQLProvider {
 
     private final String ALIAS_SPLIT = ":";
     private static final String AND = " AND ";
@@ -31,10 +31,7 @@ public class APIJSONProvider extends AbstractProvider {
      * 所有操作都会涉及到的内容
      */
 
-    /**
-     * 传入的参数应该是一个通过验证的APIJSON请求
-     * @param obj
-     */
+    /** 传入的参数应该是一个通过验证的APIJSON请求 */
     public APIJSONProvider(JSONObject obj) {
         if (obj == null) {
             error("APIJSONProvider传入的请求不能为空");
@@ -118,7 +115,7 @@ public class APIJSONProvider extends AbstractProvider {
      * 目前支持函数
      */
     @Override
-    public List<String> getSelect() {
+    public List<String> getSelectFields() {
         List<String> list = new ArrayList<>();
         if (getStatementType() == StatementType.SELECT) {
             Set<String> tableNames = request.keySet();
@@ -747,7 +744,7 @@ public class APIJSONProvider extends AbstractProvider {
      * 有@标记的才会更新，否则会被认为是WHERE的条件
      */
     @Override
-    public List<String> getSets() {
+    public List<String> getUpdateFields() {
         List<String> list = new ArrayList<>();
         if (getStatementType() == StatementType.UPDATE) {
             Set<String> tableNames = request.keySet();

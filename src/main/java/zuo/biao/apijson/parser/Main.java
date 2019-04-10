@@ -39,7 +39,7 @@ public class Main {
         APIJSONProvider apijsonProvider = new APIJSONProvider(req);
 //        apijsonProvider.setStatementType(StatementType.SELECT);
         apijsonProvider.setStatementType(StatementType.SELECT);
-		apijsonProvider.getTableBlackList().add("Retail");
+//		apijsonProvider.getTableBlackList().add("Retail");
 //		apijsonProvider.getTableWhiteList().add("Retail");
 //		apijsonProvider.getTableWhiteList().add("StorE");
 //		apijsonProvider.getColumnBlackList().add("retail.id");
