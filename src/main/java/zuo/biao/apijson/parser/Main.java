@@ -60,9 +60,9 @@ public class Main {
         APIJSONProvider apijsonProvider = new APIJSONProvider(req);
         apijsonProvider.setStatementType(StatementType.SELECT);
 //        apijsonProvider.setStatementType(StatementType.SELECT);
-////		apijsonProvider.getTableBlackList().add("Retail");
-////		apijsonProvider.getTableWhiteList().add("Retail");
-////		apijsonProvider.getTableWhiteList().add("StorE");
+////		apijsonProvider.getTableBlackSet().add("Retail");
+////		apijsonProvider.getTableWhiteSet().add("Retail");
+////		apijsonProvider.getTableWhiteSet().add("StorE");
 ////		apijsonProvider.getColumnBlackList().add("retail.id");
 ////		apijsonProvider.getColumnWhiteList().add("retail.*");
 ////		apijsonProvider.getColumnWhiteList().add("retail.amt");

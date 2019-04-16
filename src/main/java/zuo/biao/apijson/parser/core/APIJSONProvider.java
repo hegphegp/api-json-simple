@@ -1,9 +1,7 @@
 package zuo.biao.apijson.parser.core;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
@@ -13,13 +11,12 @@ public class APIJSONProvider extends SQLProvider {
     private final String ALIAS_SPLIT = ":";
     private static final String AND = " AND ";
     private static final String OR = " OR ";
-    private final String q = "\"";
     private boolean isWrap = false;
 
-    private List<String> tableWhiteList = new ArrayList();
-    private List<String> tableBlackList = new ArrayList();
-    private List<String> columnWhiteList = new ArrayList();
-    private List<String> columnBlackList = new ArrayList();
+    public Set<String> tableWhiteSet = new HashSet();
+    public Set<String> tableBlackSet = new HashSet();
+    public Map<String,Set<String>> columnWhiteMap = new HashMap();
+    public Map<String,Set<String>> columnBlackMap = new HashMap();
 
     private JSONObject request;
     private JSONObject join;
@@ -94,7 +91,6 @@ public class APIJSONProvider extends SQLProvider {
      *              查询逻辑
      * ==================================
      */
-
     /**
      * 解析请求中的字段
      * 路径：/表名/@column
@@ -191,7 +187,7 @@ public class APIJSONProvider extends SQLProvider {
     }
 
     private String wrapColumn(String tableAliasName, String columnAliasName) {
-        return isWrap ? q + tableAliasName + "." + columnAliasName + q : q + columnAliasName + q;
+        return isWrap ? "\"" + tableAliasName + "." + columnAliasName + "\"" : "\"" + columnAliasName + "\"";
     }
 
     /**
@@ -239,7 +235,6 @@ public class APIJSONProvider extends SQLProvider {
                         list.add(tableAliasName + "." + condition + " = '" + ((String) propertis.get(condition)).replaceAll("'", "''") + "'");
                     }
                 } else if (condition.matches("(\\w+(!|&|\\|)?\\{\\})+")) {
-
                     //表示这是一个多条件类型
                     if (propertis.get(condition) instanceof String) {
                         String exp = (String) propertis.get(condition);
@@ -262,43 +257,10 @@ public class APIJSONProvider extends SQLProvider {
                         JSONArray array = (JSONArray) propertis.get(condition);
                         //分离出字段名
                         String columnName = condition.replaceAll("\\{\\}", "").replaceAll("&", "").replaceAll("!", "");
-                        String limit = "";
                         if (condition.endsWith("!{}")) {
-                            if (!array.isEmpty()) {
-                                for (int i = 0; i < array.size(); i++) {
-                                    Object obj = array.get(i);
-                                    if (i != 0) {
-                                        limit += ", ";
-                                    }
-                                    if (obj instanceof Integer ||
-                                            obj instanceof Float ||
-                                            obj instanceof Double ||
-                                            obj instanceof BigDecimal) {
-                                        limit += obj;
-                                    } else if (obj instanceof String) {
-                                        limit += "'" + ((String) obj).replaceAll("'", "''") + "'";
-                                    }
-                                }
-                                list.add(tableAliasName + "." + columnName + " NOT IN [" + limit + "]");
-                            }
+                            assemblyArrConditions(list, array, tableAliasName, columnName, false);
                         } else {
-                            if (!array.isEmpty()) {
-                                for (int i = 0; i < array.size(); i++) {
-                                    Object obj = array.get(i);
-                                    if (i != 0) {
-                                        limit += ", ";
-                                    }
-                                    if (obj instanceof Integer ||
-                                            obj instanceof Float ||
-                                            obj instanceof Double ||
-                                            obj instanceof BigDecimal) {
-                                        limit += obj;
-                                    } else if (obj instanceof String) {
-                                        limit += "'" + ((String) obj).replaceAll("'", "''") + "'";
-                                    }
-                                }
-                                list.add(tableAliasName + "." + columnName + " IN [" + limit + "]");
-                            }
+                            assemblyArrConditions(list, array, tableAliasName, columnName, true);
                         }
                     }
                 } else if (condition.matches("\\w+~")) {
@@ -351,10 +313,26 @@ public class APIJSONProvider extends SQLProvider {
                     }
                 }
             }
-
-
         }
         return list;
+    }
+
+    public void assemblyArrConditions(List<String> list, JSONArray array, String tableAliasName, String columnName, boolean isIn) {
+        String limit = "";
+        if (!array.isEmpty()) {
+            for (int i = 0; i < array.size(); i++) {
+                Object obj = array.get(i);
+                if (i != 0) {
+                    limit += ", ";
+                }
+                if (obj instanceof Integer || obj instanceof Float || obj instanceof Double || obj instanceof BigDecimal) {
+                    limit += obj;
+                } else if (obj instanceof String) {
+                    limit += "'" + ((String) obj).replaceAll("'", "''") + "'";
+                }
+            }
+            list.add(tableAliasName + "." + columnName + (isIn==false?" NOT ":" ")+"IN [" + limit + "]");
+        }
     }
 
     public void assemblySQLOrAnd(List<String> list, String Operation, String tableAliasName, String columnName, String[] terms) {
@@ -379,6 +357,7 @@ public class APIJSONProvider extends SQLProvider {
         }
         list.add(limit);
     }
+
     /**
      * 内连接
      * 请求："@innerJoin" : ["table1.column1 = table2.column2","table1.column1 = table2.column2"]
@@ -386,7 +365,6 @@ public class APIJSONProvider extends SQLProvider {
      */
     @Override
     public List<String> getInnerJoin() {
-        // TODO Auto-generated method stub
         List<String> list = new ArrayList<>();
         if (getStatementType() == StatementType.SELECT) {
             if (join != null && join.get("@innerJoin") != null) {
@@ -416,12 +394,9 @@ public class APIJSONProvider extends SQLProvider {
         return list;
     }
 
-    /**
-     * 左外连接
-     */
+    /** 左外连接 */
     @Override
     public List<String> getLeftOuterJoin() {
-        // TODO Auto-generated method stub
         List<String> list = new ArrayList<>();
         if (getStatementType() == StatementType.SELECT) {
             if (join != null && join.get("@leftOuterJoin") != null) {
@@ -451,9 +426,7 @@ public class APIJSONProvider extends SQLProvider {
         return list;
     }
 
-    /**
-     * 右外链接
-     */
+    /** 右外链接 */
     @Override
     public List<String> getRightOuterJoin() {
         // TODO Auto-generated method stub
@@ -486,9 +459,7 @@ public class APIJSONProvider extends SQLProvider {
         return list;
     }
 
-    /**
-     * join连接
-     */
+    /** join连接 */
     @Override
     public List<String> getJoin() {
         List<String> list = new ArrayList<>();
@@ -520,9 +491,7 @@ public class APIJSONProvider extends SQLProvider {
         return list;
     }
 
-    /**
-     * 外连接
-     */
+    /** 外连接 */
     @Override
     public List<String> getOuterJoin() {
         List<String> list = new ArrayList<>();
@@ -554,10 +523,7 @@ public class APIJSONProvider extends SQLProvider {
         return list;
     }
 
-    /**
-     * 解析分组
-     * "@group":"store_id"
-     */
+    /** 解析分组 "@group":"store_id" */
     @Override
     public List<String> getGroupBy() {
         List<String> list = new ArrayList<>();
@@ -596,10 +562,7 @@ public class APIJSONProvider extends SQLProvider {
         return list;
     }
 
-    /**
-     * 解析排序逻辑
-     * column1+,column2-,+表示升序，-表示降序
-     */
+    /** 解析排序逻辑 column1+,column2-,+表示升序，-表示降序 */
     @Override
     public List<String> getOrderBy() {
         List<String> list = new ArrayList<>();
@@ -630,10 +593,11 @@ public class APIJSONProvider extends SQLProvider {
                     //没有填写@orders字段，默认为全部
                     String[] columnNames = columnsValue.replaceAll("\\s", "").split(",");
                     for (String columnName : columnNames) {
-                        if (columnName.endsWith("+"))
+                        if (columnName.endsWith("+")) {
                             list.add(tableAliasName + "." + columnName.replaceAll("\\+", "") + " ASC");
-                        else if (columnName.endsWith("-"))
+                        } else if (columnName.endsWith("-")) {
                             list.add(tableAliasName + "." + columnName.replaceAll("\\-", "") + " DESC");
+                        }
                     }
                 }
             }
@@ -730,7 +694,6 @@ public class APIJSONProvider extends SQLProvider {
      *              修改逻辑
      * ==================================
      */
-
     /**
      * 更新字段
      * "@description": "20190101,元旦快乐"
@@ -781,7 +744,6 @@ public class APIJSONProvider extends SQLProvider {
      * ==================================
      *              权限逻辑
      * ==================================
-     *
      * 不管权限认证系统有多复杂，最后到生成SQL这步
      * 都是进行黑白名单的检查
      * 不论黑白，只要名单为空，表示所有数据都可以
@@ -793,105 +755,32 @@ public class APIJSONProvider extends SQLProvider {
      *   大小写不敏感
      * 所有字段：
      *   格式： 表名.*
-     *
      * 如果想要新增或者修改的更复杂的逻辑，
      * 请在外层处理完成之后以制定格式提交该SQL的黑白名单即可
-     *
      */
 
-    /**
-     * 表的黑白名单检查
-     *
-     * @param tableName
-     */
+    /** 表的黑白名单检查 */
     private void validateTable(String tableName) {
-        String tableUCN = tableName.toUpperCase();
-        if (tableBlackList != null && !tableBlackList.isEmpty()) {
-            for (String tn : tableBlackList) {
-                if (tableUCN.equals(tn.toUpperCase())) {
-                    error("请求的表:" + tableName + "在黑名单中");
-                    return;
-                }
-            }
+        if (tableBlackSet.contains(tableName)) {
+//            error("请求的表:" + tableName + "在黑名单中");
+            return;
         }
-
-        if (tableWhiteList != null && !tableWhiteList.isEmpty()) {
-            for (String tn : tableWhiteList) {
-                if (tableUCN.equals(tn.toUpperCase())) {
-                    return;
-                }
-            }
-            error("请求的表:" + tableName + "不在白名单中");
+        if (tableWhiteSet.contains(tableName)==false) {
+//            error("请求的表:" + tableName + "不在白名单中");
         }
     }
 
-    /**
-     * 字段黑白名单检查
-     * 要求： "表.列"
-     * @param columnName
-     */
+    /** 字段黑白名单检查 */
     private void validateColumn(String tableName, String columnName) {
-        String tableUCN = tableName.toUpperCase();
-        String columnUCN = columnName.toUpperCase();
-        String tcUCN = tableUCN + "." + columnUCN;
-        if (columnBlackList != null && !columnBlackList.isEmpty()) {
-            for (String tc : columnBlackList) {
-                if (tcUCN.equals(tc.toUpperCase())) {
-                    error("请求的字段:" + tcUCN + "在黑名单中");
-                    return;
-                }
-            }
+        Set<String> columnBlackSet = columnBlackMap.get(tableName);
+        if (columnBlackSet!=null && columnBlackSet.contains(columnName)) {
+//            error("请求的字段:" + columnName + "在"+tableName+"黑名单中");
+            return;
         }
 
-        if (columnWhiteList != null && !columnWhiteList.isEmpty()) {
-            for (String tc : columnWhiteList) {
-                if (tc.endsWith(".*") || tcUCN.equals(tc.toUpperCase())) {
-                    return;
-                }
-            }
-            error("请求的字段:" + tcUCN + "不在白名单中");
+        Set<String> columnWhiteSet = columnWhiteMap.get(tableName);
+        if (columnWhiteSet==null || columnWhiteSet.contains(columnName)==false) {
+//            error("请求的字段:" + columnName + "不在"+tableName+"表白名单中");
         }
     }
-
-    public List<String> getTableWhiteList() {
-        return tableWhiteList;
-    }
-
-    public void setTableWhiteList(List<String> tableWhiteList) {
-        this.tableWhiteList = tableWhiteList;
-    }
-
-    public List<String> getTableBlackList() {
-        return tableBlackList;
-    }
-
-    public void setTableBlackList(List<String> tableBlackList) {
-        this.tableBlackList = tableBlackList;
-    }
-
-    public List<String> getColumnWhiteList() {
-        return columnWhiteList;
-    }
-
-    public void setColumnWhiteList(List<String> columnWhiteList) {
-        this.columnWhiteList = columnWhiteList;
-    }
-
-    public List<String> getColumnBlackList() {
-        return columnBlackList;
-    }
-
-    public void setColumnBlackList(List<String> columnBlackList) {
-        this.columnBlackList = columnBlackList;
-    }
-
-    public boolean isWrap() {
-        return isWrap;
-    }
-
-    public void setWrap(boolean isWrap) {
-        this.isWrap = isWrap;
-    }
-
-
 }

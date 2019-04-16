@@ -3,9 +3,7 @@ package zuo.biao.apijson.parser.core;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * 实现这个接口提供SQLBuilder获取构造SQL语句所需要的数据
- */
+/** 实现这个接口提供SQLBuilder获取构造SQL语句所需要的数据 */
 public class SQLProvider {
     private StatementType statementType;
     private List<String> updateFields = new ArrayList();
@@ -27,27 +25,18 @@ public class SQLProvider {
 
     private Message message = new Message();
 
-    /**
-     * 消息类，如果Provider中有异常，通过这个方法可以传递消息
-     * @return
-     */
+    /** 消息类，如果Provider中有异常，通过这个方法可以传递消息 */
     public Message getMessage() {
         return message;
     }
 
-    /**
-     * 接收错误消息
-     * @param err
-     */
+    /** 接收错误消息 */
     public void error(String err) {
         StackTraceElement ste = new Throwable().getStackTrace()[1];
         this.message.error(err, ste);
     }
 
-    /**
-     * StatementType表示要生成的是SELECT,INSERT,UPDATE,DLEETE中的哪种
-     * @return StatementType
-     */
+    /** StatementType表示要生成的是SELECT,INSERT,UPDATE,DLEETE中的哪种 */
     public StatementType getStatementType() {
         return statementType;
     }
@@ -56,29 +45,17 @@ public class SQLProvider {
         this.statementType = statementType;
     }
 
-    /**
-     * StatementType为UPDATE时
-     * UPDATE要更新的字段
-     * @return List<String>
-     */
+    /** StatementType为UPDATE时，UPDATE要更新的字段 */
     public List<String> getUpdateFields() {
         return updateFields;
     }
 
-    /**
-     * StatementType为SELECT时
-     * SELECT要查询的字段
-     * @return List<String>
-     */
+    /** StatementType为SELECT时，SELECT要查询的字段 */
     public List<String> getSelectFields() {
         return selectFields;
     }
 
-    /**
-     * StatementType所有类型都将使用这个方法
-     * SQL所涉及的表
-     * @return
-     */
+    /** StatementType所有类型都将使用这个方法，SQL所涉及的表 */
     public List<String> getTables() {
         return tables;
     }
@@ -103,10 +80,7 @@ public class SQLProvider {
         return rightOuterJoin;
     }
 
-    /**
-     * SQL过滤条件
-     * @return
-     */
+    /** SQL过滤条件 */
     public List<String> getWhere() {
         return where;
     }
@@ -115,20 +89,12 @@ public class SQLProvider {
         return having;
     }
 
-    /**
-     * StatementType为SELECT时
-     * SQL查询时的分组
-     * @return
-     */
+    /** StatementType为SELECT时，SQL查询时的分组 */
     public List<String> getGroupBy() {
         return groupBy;
     }
 
-    /**
-     * StatementType为SELECT时
-     * SQL查询时的排序
-     * @return
-     */
+    /** StatementType为SELECT时，SQL查询时的排序 */
     public List<String> getOrderBy() {
         return orderBy;
     }
@@ -137,20 +103,12 @@ public class SQLProvider {
         return lastList;
     }
 
-    /**
-     * StatementType为INSERT时
-     * SQL新增的字段
-     * @return
-     */
+    /** StatementType为INSERT时，SQL新增的字段 */
     public List<String> getColumns() {
         return columns;
     }
 
-    /**
-     * StatementType为INSERT时
-     * SQL新增字段所对应的值
-     * @return
-     */
+    /** StatementType为INSERT时，SQL新增字段所对应的值 */
     public List<String> getValues() {
         return values;
     }
