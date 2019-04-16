@@ -37,7 +37,8 @@ public class Main {
                 "            'name': 'name' "                                + "\r\n" +
                 "        }, "                                                + "\r\n" +
                 "        'table2:t2': {"                                     + "\r\n" +
-                "            '@column': 'id,docno'"                          + "\r\n" +
+                "            '@column': 'id,docno',"                         + "\r\n" +
+                "            'docno': 'docno' "                              + "\r\n" +
                 "        },"                                                 + "\r\n" +
                 "        'table3:t3': {"                                     + "\r\n" +
                 "            '@column': 'id,docno'"                          + "\r\n" +
