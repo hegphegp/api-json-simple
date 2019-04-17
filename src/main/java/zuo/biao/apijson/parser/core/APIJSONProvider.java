@@ -2,6 +2,7 @@ package zuo.biao.apijson.parser.core;
 
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
@@ -18,23 +19,27 @@ public class APIJSONProvider extends SQLProvider {
     public Map<String,Set<String>> columnWhiteMap = new HashMap();
     public Map<String,Set<String>> columnBlackMap = new HashMap();
 
+    private Set<String> tableNames;
     private JSONObject request;
     private JSONObject join;
 
     /** 传入的参数应该是一个通过验证的APIJSON请求 */
     public APIJSONProvider(JSONObject obj) {
         if (obj == null) {
-            error("APIJSONProvider传入的请求不能为空");
+            throw new RuntimeException("APIJSONProvider传入的请求不能为空");
         }
         JSONObject tabs = obj.getJSONObject("[]");
-        if (tabs == null) {
-            this.request = obj;
-        } else {
-            this.request = tabs;
-            this.join = obj.getJSONObject("join");
+        this.request = tabs!=null? tabs:obj;
+        this.join = tabs!=null? obj.getJSONObject("join"):new JSONObject();
+        tableNames = this.request.keySet();
+        for (String tableName : tableNames) {
+            if (!tableName.matches("(\\w+(:\\w+)?)")) {
+                throw new RuntimeException("表" + tableName + "格式不符合");
+            }
         }
     }
 
+    private String[] checkJoin = {"@innerJoin", "@leftOuterJoin", "@rightOuterJoin", "@join", "@outerJoin"};
     /**
      * 解析请求中的表名
      * 表名必须符合：(\w+(:\w+)?)
@@ -46,41 +51,28 @@ public class APIJSONProvider extends SQLProvider {
     @Override
     public List<String> getTables() {
         List<String> list = new ArrayList<>();
-        Set<String> tableNames = request.keySet();
-        String tableAliasName;
-        String tableRealName;
-        out:
         for (String tableName : tableNames) {
-            if (!tableName.matches("(\\w+(:\\w+)?)")) {
-                error("表" + tableName + "格式不符合");
-                return null;
-            }
             //是否有自定义别名
-            if (tableName.contains(ALIAS_SPLIT)) {
-                String[] splitArray = tableName.split(ALIAS_SPLIT);
-                tableRealName = splitArray[0];
-                tableAliasName = splitArray[1];
-            } else {
-                tableRealName = tableAliasName = tableName;
-            }
-            if (join != null) {
-                String[] checkJoin = {"@innerJoin", "@leftOuterJoin", "@rightOuterJoin", "@join", "@outerJoin"};
-                for (String joinKey : checkJoin) {
-                    JSONArray array = join.getJSONArray(joinKey);
-                    if (array != null && array.size() != 0) {
-                        for (Object obj : array) {
-                            if (obj instanceof String && (((String) obj).startsWith(tableRealName) || ((String) obj).startsWith(tableAliasName))) {
-                                continue out;
-                            }
-                        }
-                    }
-                }
-            }
+            String tableRealName  = tableName.contains(ALIAS_SPLIT)? tableName.split(ALIAS_SPLIT)[0]:tableName;
+            String tableAliasName = tableName.contains(ALIAS_SPLIT)? tableName.split(ALIAS_SPLIT)[1]:tableName;
             validateTable(tableRealName);
             if (getStatementType() == StatementType.SELECT) {
                 list.add(tableRealName + " " + tableAliasName);
             } else {
                 list.add(tableRealName);
+            }
+        }
+        for (String str:list.stream().collect(Collectors.toSet())) {
+            String[] arr = str.split(" ");
+            for (String joinKey:checkJoin) {
+                JSONArray array = join.getJSONArray(joinKey);
+                array = array!=null? array:new JSONArray();
+                for (Object obj:array) {
+                    String joinTableName = obj instanceof String ? (String) obj:"";
+                    if (joinTableName.startsWith(arr[0]) || joinTableName.startsWith(arr[1])) {
+                        list.remove(str);
+                    }
+                }
             }
         }
         return list;
@@ -105,25 +97,13 @@ public class APIJSONProvider extends SQLProvider {
      */
     @Override
     public List<String> getSelectFields() {
-        List<String> list = new ArrayList<>();
+        List<String> list = new ArrayList();
         if (getStatementType() == StatementType.SELECT) {
             Set<String> tableNames = request.keySet();
-            String tableRealName;
-            String tableAliasName;
-            for (String tableName : tableNames) {
-                //格式检查
-                if (!tableName.matches("(\\w+(:\\w+)?)")) {
-                    error("表" + tableName + "格式不符合");
-                    return null;
-                }
+            for (String tableName:tableNames) {
                 //是否有自定义别名
-                if (tableName.contains(ALIAS_SPLIT)) {
-                    tableRealName = tableName.split(ALIAS_SPLIT)[0];
-                    //填写了表别名
-                    tableAliasName = tableName.split(ALIAS_SPLIT)[1];
-                } else {
-                    tableRealName = tableAliasName = tableName;
-                }
+                String tableRealName  = tableName.contains(ALIAS_SPLIT)? tableName.split(ALIAS_SPLIT)[0]:tableName;
+                String tableAliasName = tableName.contains(ALIAS_SPLIT)? tableName.split(ALIAS_SPLIT)[1]:tableName;
                 // 获取请求@column的值
                 JSONObject propertis = request.getJSONObject(tableName);
                 String columnsValue = propertis.getString("@column");
@@ -132,55 +112,53 @@ public class APIJSONProvider extends SQLProvider {
                     validateColumn(tableRealName, "*");
                     //没有填写@column字段，默认为全部
                     list.add(tableAliasName + ".*");
-                } else {
-                    if (!columnsValue.matches("((\\w+\\(\\w+\\):\\w+|\\w+)(:\\w+)?)+(\\s?,\\s?((\\w+\\(\\w+\\):\\w+|\\w+)(:\\w+)?)+)*")) {
-                        error("字段@column：" + columnsValue + "格式不符合，正确请求如：a,b,c:d或者a,max(d):d,c:e");
-                        return null;
-                    }
-                    //填写了，则返回tableAliasName.colName或tableAliasName.columnName as columnAliasName
-                    String[] columnNames = columnsValue.replaceAll("\\s", "").split(",");
-                    for (String columnName : columnNames) {
-                        if (columnName.contains(ALIAS_SPLIT)) {
-                            //填写了字段别名，使用：tableAliasName.columnName as columnAliasName这种类型
-                            //这里columnRealName有两种情况，如：id或max(id)
-                            String functionOrColumn = columnName.split(ALIAS_SPLIT)[0];
-                            if (functionOrColumn.contains("(")) {
-                                //有函数的字段
-                                //去掉)
-                                functionOrColumn = functionOrColumn.replaceAll("\\)", "");
-                                String[] functionStrs = functionOrColumn.split("\\(");
-                                String funcitonName = functionStrs[0];
-                                //要对函数进行控制这这里进行
-                                //此处省略函数合法性检查的代码...
-                                String columnRealName = functionStrs[1];
-                                String columnAliasName = columnName.split(ALIAS_SPLIT)[1];
-                                validateColumn(tableRealName, columnRealName);
-                                if (propertis.getString("id@") != null)
-                                    columnAliasName = wrapColumn(tableAliasName, columnAliasName);
-                                list.add(funcitonName + "(" + tableAliasName + "." + columnRealName + ")" + " as " + columnAliasName);
-                            } else {
-                                //没函数的字段
-                                String columnRealName = functionOrColumn;
-                                String columnAliasName = columnName.split(ALIAS_SPLIT)[1];
-                                validateColumn(tableRealName, columnRealName);
-                                if (propertis.getString("id@") != null) {
-                                    columnAliasName = wrapColumn(tableAliasName, columnAliasName);
-                                }
-                                list.add(tableAliasName + "." + columnRealName + " as " + columnAliasName);
-                            }
+                    continue;
+                }
+                if (!columnsValue.matches("((\\w+\\(\\w+\\):\\w+|\\w+)(:\\w+)?)+(\\s?,\\s?((\\w+\\(\\w+\\):\\w+|\\w+)(:\\w+)?)+)*")) {
+                    throw new RuntimeException("字段@column：" + columnsValue + "格式不符合，正确请求如：a,b,c:d或者a,max(d):d,c:e");
+                }
+                //填写了，则返回tableAliasName.colName或tableAliasName.columnName as columnAliasName
+                String[] columnNames = columnsValue.replaceAll("\\s", "").split(",");
+                for (String columnName:columnNames) {
+                    if (columnName.contains(ALIAS_SPLIT)) {
+                        //填写了字段别名，使用：tableAliasName.columnName as columnAliasName这种类型
+                        //这里columnRealName有两种情况，如：id或max(id)
+                        String functionOrColumn = columnName.split(ALIAS_SPLIT)[0];
+                        if (functionOrColumn.contains("(")) {
+                            //有函数的字段
+                            //去掉)
+                            functionOrColumn = functionOrColumn.replaceAll("\\)", "");
+                            String[] functionStrs = functionOrColumn.split("\\(");
+                            String funcitonName = functionStrs[0];
+                            //要对函数进行控制这这里进行
+                            //此处省略函数合法性检查的代码...
+                            String columnRealName = functionStrs[1];
+                            String columnAliasName = columnName.split(ALIAS_SPLIT)[1];
+                            validateColumn(tableRealName, columnRealName);
+                            if (propertis.getString("id@") != null)
+                                columnAliasName = wrapColumn(tableAliasName, columnAliasName);
+                            list.add(funcitonName + "(" + tableAliasName + "." + columnRealName + ")" + " as " + columnAliasName);
                         } else {
-                            //使用tableAliasName.columnName类型
-                            validateColumn(tableRealName, columnName);
+                            //没函数的字段
+                            String columnRealName = functionOrColumn;
+                            String columnAliasName = columnName.split(ALIAS_SPLIT)[1];
+                            validateColumn(tableRealName, columnRealName);
                             if (propertis.getString("id@") != null) {
-                                String columnAliasName = wrapColumn(tableAliasName, columnName);
-                                list.add(tableAliasName + "." + columnName + " as " + columnAliasName);
-                            } else {
-                                list.add(tableAliasName + "." + columnName);
+                                columnAliasName = wrapColumn(tableAliasName, columnAliasName);
                             }
+                            list.add(tableAliasName + "." + columnRealName + " as " + columnAliasName);
+                        }
+                    } else {
+                        //使用tableAliasName.columnName类型
+                        validateColumn(tableRealName, columnName);
+                        if (propertis.getString("id@") != null) {
+                            String columnAliasName = wrapColumn(tableAliasName, columnName);
+                            list.add(tableAliasName + "." + columnName + " as " + columnAliasName);
+                        } else {
+                            list.add(tableAliasName + "." + columnName);
                         }
                     }
                 }
-
             }
         }
         return list;
@@ -207,19 +185,13 @@ public class APIJSONProvider extends SQLProvider {
     public List<String> getWhere() {
         List<String> list = new ArrayList<>();
         Set<String> tableNames = request.keySet();
-        String tableAliasName;
         for (String tableName : tableNames) {
             //是否有自定义别名
-            if (tableName.contains(ALIAS_SPLIT)) {
-                //填写了表别名
-                tableAliasName = tableName.split(ALIAS_SPLIT)[1];
-            } else {
-                tableAliasName = tableName;
-            }
+            String tableAliasName = tableName.contains(ALIAS_SPLIT)? tableName.split(ALIAS_SPLIT)[1]:tableName;
             // 遍历过滤条件
             JSONObject propertis = request.getJSONObject(tableName);
             conditionLoop:
-            for (String condition : propertis.keySet()) {
+            for (String condition:propertis.keySet()) {
                 //关键字则跳过
                 if (condition.startsWith("@")) {
                     continue conditionLoop;
@@ -240,8 +212,7 @@ public class APIJSONProvider extends SQLProvider {
                         String exp = (String) propertis.get(condition);
                         //是否匹配这种类型：<20.3,>3.3,=3.3
                         if (!exp.matches("(\\s?(>|<|>=|<=|=|<>)+\\s?((\\-|\\+)?\\d+(\\.\\d+)?)+)+(\\s?,\\s?((>|<|>=|<=|=|<>)+\\s?((\\-|\\+)?\\d+(\\.\\d+)?)))*")) {
-                            error(condition + "的格式不正确，正确使用方式如: >10,<20");
-                            return null;
+                            throw new RuntimeException(condition + "的格式不正确，正确使用方式如: >10,<20");
                         }
                         if (condition.endsWith("|{}")) {
                             String[] terms = exp.replaceAll("\\s", "").split(",");
@@ -270,8 +241,7 @@ public class APIJSONProvider extends SQLProvider {
                         String columnName = condition.replaceAll("~", "");
                         list.add(tableAliasName + "." + columnName + " LIKE '%" + exp.replaceAll("'", "''") + "%'");
                     } else {
-                        error(condition + "的值必须要是字符串");
-                        return null;
+                        throw new RuntimeException(condition + "的值必须要是字符串");
                     }
                 } else if (condition.matches("\\w+\\$")) {
                     //字符串查询，LIKE
@@ -280,8 +250,7 @@ public class APIJSONProvider extends SQLProvider {
                         String columnName = condition.replaceAll("\\$", "");
                         list.add(tableAliasName + "." + columnName + " LIKE '" + exp.replaceAll("'", "''") + "'");
                     } else {
-                        error(condition + "的值必须要是字符串");
-                        return null;
+                        throw new RuntimeException(condition + "的值必须要是字符串");
                     }
                 } else if (condition.matches("\\w+\\?")) {
                     //字符串查询，正则
@@ -290,8 +259,7 @@ public class APIJSONProvider extends SQLProvider {
                         String columnName = condition.replaceAll("\\?", "");
                         list.add(" regexp_like(" + tableAliasName + "." + columnName + ",'" + exp.replaceAll("'", "''") + "')");
                     } else {
-                        error(condition + "的值必须要是字符串");
-                        return null;
+                        throw new RuntimeException(condition + "的值必须要是字符串");
                     }
                 } else if (condition.matches("\\w+@")) {
                     //内连接
@@ -304,12 +272,10 @@ public class APIJSONProvider extends SQLProvider {
                             String refColumn = args[2];
                             list.add(refTable + "." + refColumn + " = " + tableAliasName + "." + columnName);
                         } else {
-                            error(condition + "必须符合：\"/表名或别名/字段名\"的形式");
-                            return null;
+                            throw new RuntimeException(condition + "必须符合：\"/表名或别名/字段名\"的形式");
                         }
                     } else {
-                        error(condition + "的值必须要是字符串");
-                        return null;
+                        throw new RuntimeException(condition + "的值必须要是字符串");
                     }
                 }
             }
@@ -376,17 +342,15 @@ public class APIJSONProvider extends SQLProvider {
                         if (joinStr.matches("\\w+\\.\\w+\\s?=\\s?\\w+\\.\\w+")) {
                             //table1.column1 = table2.column2
                             String[] tcs = joinStr.replaceAll("\\s", "").split("=");
-                            String leftTable = tcs[0].split("\\.")[0];
-                            String rightTable = tcs[1].split("\\.")[0];
-                            validateTable(leftTable);
-                            list.add(leftTable + " ON " + joinStr);
+//                            String leftTable = tcs[0].split("\\.")[0];
+//                            String rightTable = tcs[1].split("\\.")[0];
+                            validateTable(tcs[0].split("\\.")[0]);
+                            list.add(tcs[0].split("\\.")[0] + " ON " + joinStr);
                         } else {
-                            error("@innerJoin的格式必须是：table1.column1 = table2.column2,相当于INNER JOIN table1 ON table1.column1=table2.column2");
-                            return null;
+                            throw new RuntimeException("@innerJoin的格式必须是：table1.column1 = table2.column2,相当于INNER JOIN table1 ON table1.column1=table2.column2");
                         }
                     } else {
-                        error("@innerJoin的类型必须是String类型，填写的值如：table1.column1 = table2.column2,相当于INNER JOIN table1 ON table1.column1=table2.column2。注意：表有别名的应该写表别名");
-                        return null;
+                        throw new RuntimeException("@innerJoin的类型必须是String类型，填写的值如：table1.column1 = table2.column2,相当于INNER JOIN table1 ON table1.column1=table2.column2。注意：表有别名的应该写表别名");
                     }
                 }
             }
@@ -399,27 +363,22 @@ public class APIJSONProvider extends SQLProvider {
     public List<String> getLeftOuterJoin() {
         List<String> list = new ArrayList<>();
         if (getStatementType() == StatementType.SELECT) {
-            if (join != null && join.get("@leftOuterJoin") != null) {
-                JSONArray stms = join.getJSONArray("@leftOuterJoin");
-                for (int i = 0; i < stms.size(); i++) {
-                    Object obj = stms.get(i);
-                    if (obj instanceof String) {
-                        String joinStr = (String) obj;
-                        if (joinStr.matches("\\w+\\.\\w+\\s?=\\s?\\w+\\.\\w+")) {
-                            //table1.column1 = table2.column2
-                            String[] tcs = joinStr.replaceAll("\\s", "").split("=");
-                            String leftTable = tcs[0].split("\\.")[0];
-                            String rightTable = tcs[1].split("\\.")[0];
-                            validateTable(leftTable);
-                            list.add(leftTable + " ON " + joinStr);
-                        } else {
-                            error("@leftOuterJoin的格式必须是：table1.column1 = table2.column2,相当于LEFT OUTER JOIN table1 ON table1.column1=table2.column2");
-                            return null;
-                        }
+            JSONArray stms = join.get("@leftOuterJoin")!= null? join.getJSONArray("@leftOuterJoin"):new JSONArray();
+            for (int i = 0; i < stms.size(); i++) {
+                if (stms.get(i) instanceof String) {
+                    String joinStr = (String) stms.get(i);
+                    if (joinStr.matches("\\w+\\.\\w+\\s?=\\s?\\w+\\.\\w+")) {
+                        //table1.column1 = table2.column2
+                        String[] tcs = joinStr.replaceAll("\\s", "").split("=");
+//                            String leftTable = tcs[0].split("\\.")[0];
+//                            String rightTable = tcs[1].split("\\.")[0];
+                        validateTable(tcs[0].split("\\.")[0]);
+                        list.add(tcs[0].split("\\.")[0] + " ON " + joinStr);
                     } else {
-                        error("@leftOuterJoin的类型必须是String类型，填写的值如：table1.column1 = table2.column2,相当于LEFT OUTER JOIN table1 ON table1.column1=table2.column2。注意：表有别名的应该写表别名");
-                        return null;
+                        throw new RuntimeException("@leftOuterJoin的格式必须是：table1.column1 = table2.column2,相当于LEFT OUTER JOIN table1 ON table1.column1=table2.column2");
                     }
+                } else {
+                    throw new RuntimeException("@leftOuterJoin的类型必须是String类型，填写的值如：table1.column1 = table2.column2,相当于LEFT OUTER JOIN table1 ON table1.column1=table2.column2。注意：表有别名的应该写表别名");
                 }
             }
         }
@@ -432,27 +391,23 @@ public class APIJSONProvider extends SQLProvider {
         // TODO Auto-generated method stub
         List<String> list = new ArrayList<>();
         if (getStatementType() == StatementType.SELECT) {
-            if (join != null && join.get("@rightOuterJoin") != null) {
-                JSONArray stms = join.getJSONArray("@rightOuterJoin");
-                for (int i = 0; i < stms.size(); i++) {
-                    Object obj = stms.get(i);
-                    if (obj instanceof String) {
-                        String joinStr = (String) obj;
-                        if (joinStr.matches("\\w+\\.\\w+\\s?=\\s?\\w+\\.\\w+")) {
-                            //table1.column1 = table2.column2
-                            String[] tcs = joinStr.replaceAll("\\s", "").split("=");
-                            String leftTable = tcs[0].split("\\.")[0];
-                            String rightTable = tcs[1].split("\\.")[0];
-                            validateTable(leftTable);
-                            list.add(leftTable + " ON " + joinStr);
-                        } else {
-                            error("@rightOuterJoin的格式必须是：table1.column1 = table2.column2,相当于RIGHT OUTER JOIN table1 ON table1.column1=table2.column2");
-                            return null;
-                        }
+            JSONArray stms = join.get("@rightOuterJoinv")!= null? join.getJSONArray("@rightOuterJoin"):new JSONArray();
+            for (int i = 0; i < stms.size(); i++) {
+                Object obj = stms.get(i);
+                if (obj instanceof String) {
+                    String joinStr = (String) obj;
+                    if (joinStr.matches("\\w+\\.\\w+\\s?=\\s?\\w+\\.\\w+")) {
+                        //table1.column1 = table2.column2
+                        String[] tcs = joinStr.replaceAll("\\s", "").split("=");
+//                        String leftTable = tcs[0].split("\\.")[0];
+//                        String rightTable = tcs[1].split("\\.")[0];
+                        validateTable(tcs[0].split("\\.")[0]);
+                        list.add(tcs[0].split("\\.")[0] + " ON " + joinStr);
                     } else {
-                        error("@rightOuterJoin的类型必须是String类型，填写的值如：table1.column1 = table2.column2,相当于RIGHT OUTER JOIN table1 ON table1.column1=table2.column2。注意：表有别名的应该写表别名");
-                        return null;
+                        throw new RuntimeException("@rightOuterJoin的格式必须是：table1.column1 = table2.column2,相当于RIGHT OUTER JOIN table1 ON table1.column1=table2.column2");
                     }
+                } else {
+                    throw new RuntimeException("@rightOuterJoin的类型必须是String类型，填写的值如：table1.column1 = table2.column2,相当于RIGHT OUTER JOIN table1 ON table1.column1=table2.column2。注意：表有别名的应该写表别名");
                 }
             }
         }
@@ -473,17 +428,15 @@ public class APIJSONProvider extends SQLProvider {
                         if (joinStr.matches("\\w+\\.\\w+\\s?=\\s?\\w+\\.\\w+")) {
                             //table1.column1 = table2.column2
                             String[] tcs = joinStr.replaceAll("\\s", "").split("=");
-                            String leftTable = tcs[0].split("\\.")[0];
-                            String rightTable = tcs[1].split("\\.")[0];
-                            validateTable(leftTable);
-                            list.add(leftTable + " ON " + joinStr);
+//                            String leftTable = tcs[0].split("\\.")[0];
+//                            String rightTable = tcs[1].split("\\.")[0];
+                            validateTable(tcs[0].split("\\.")[0]);
+                            list.add(tcs[0].split("\\.")[0] + " ON " + joinStr);
                         } else {
-                            error("@join的格式必须是：table1.column1 = table2.column2,相当于JOIN table1 ON table1.column1=table2.column2");
-                            return null;
+                            throw new RuntimeException("@join的格式必须是：table1.column1 = table2.column2,相当于JOIN table1 ON table1.column1=table2.column2");
                         }
                     } else {
-                        error("@join的类型必须是String类型，填写的值如：table1.column1 = table2.column2,相当于JOIN table1 ON table1.column1=table2.column2。注意：表有别名的应该写表别名");
-                        return null;
+                        throw new RuntimeException("@join的类型必须是String类型，填写的值如：table1.column1 = table2.column2,相当于JOIN table1 ON table1.column1=table2.column2。注意：表有别名的应该写表别名");
                     }
                 }
             }
@@ -505,17 +458,15 @@ public class APIJSONProvider extends SQLProvider {
                         if (joinStr.matches("\\w+\\.\\w+\\s?=\\s?\\w+\\.\\w+")) {
                             //table1.column1 = table2.column2
                             String[] tcs = joinStr.replaceAll("\\s", "").split("=");
-                            String leftTable = tcs[0].split("\\.")[0];
-                            String rightTable = tcs[1].split("\\.")[0];
-                            validateTable(leftTable);
-                            list.add(leftTable + " ON " + joinStr);
+//                            String leftTable = tcs[0].split("\\.")[0];
+//                            String rightTable = tcs[1].split("\\.")[0];
+                            validateTable(tcs[0].split("\\.")[0]);
+                            list.add(tcs[0].split("\\.")[0] + " ON " + joinStr);
                         } else {
-                            error("@outerJoin的格式必须是：table1.column1 = table2.column2,相当于OUTER JOIN table1 ON table1.column1=table2.column2");
-                            return null;
+                            throw new RuntimeException("@outerJoin的格式必须是：table1.column1 = table2.column2,相当于OUTER JOIN table1 ON table1.column1=table2.column2");
                         }
                     } else {
-                        error("@outerJoin的类型必须是String类型，填写的值如：table1.column1 = table2.column2,相当于OUTER JOIN table1 ON table1.column1=table2.column2。注意：表有别名的应该写表别名");
-                        return null;
+                        throw new RuntimeException("@outerJoin的类型必须是String类型，填写的值如：table1.column1 = table2.column2,相当于OUTER JOIN table1 ON table1.column1=table2.column2。注意：表有别名的应该写表别名");
                     }
                 }
             }
@@ -529,27 +480,19 @@ public class APIJSONProvider extends SQLProvider {
         List<String> list = new ArrayList<>();
         if (getStatementType() == StatementType.SELECT) {
             Set<String> tableNames = request.keySet();
-            String tableAliasName;
             for (String tableName : tableNames) {
                 //格式检查
                 if (!tableName.matches("(\\w+(:\\w+)?)")) {
-                    error("表" + tableName + "格式不符合");
-                    return null;
+                    throw new RuntimeException("表" + tableName + "格式不符合");
                 }
                 //是否有自定义别名
-                if (tableName.contains(ALIAS_SPLIT)) {
-                    //填写了表别名
-                    tableAliasName = tableName.split(ALIAS_SPLIT)[1];
-                } else {
-                    tableAliasName = tableName;
-                }
+                String tableAliasName = tableName.contains(ALIAS_SPLIT)? tableName.split(ALIAS_SPLIT)[1]:tableName;
                 // 获取请求@group的值
                 JSONObject propertis = request.getJSONObject(tableName);
                 String columnsValue = propertis.getString("@group");
                 if (columnsValue != null) {
                     if (!columnsValue.matches("\\w+(\\s?,\\s?\\w+)*")) {
-                        error("字段@group：" + columnsValue + "格式不符合，正确请求如：a,b,c");
-                        return null;
+                        throw new RuntimeException("字段@group：" + columnsValue + "格式不符合，正确请求如：a,b,c");
                     }
                     String[] columnNames = columnsValue.replaceAll("\\s", "").split(",");
                     for (String colmunName : columnNames) {
@@ -568,27 +511,19 @@ public class APIJSONProvider extends SQLProvider {
         List<String> list = new ArrayList<>();
         if (getStatementType() == StatementType.SELECT) {
             Set<String> tableNames = request.keySet();
-            String tableAliasName;
             for (String tableName : tableNames) {
                 //格式检查
                 if (!tableName.matches("(\\w+(:\\w+)?)")) {
-                    error("表" + tableName + "格式不符合");
-                    return null;
+                    throw new RuntimeException("表" + tableName + "格式不符合");
                 }
                 //是否有自定义别名
-                if (tableName.contains(ALIAS_SPLIT)) {
-                    //填写了表别名
-                    tableAliasName = tableName.split(ALIAS_SPLIT)[1];
-                } else {
-                    tableAliasName = tableName;
-                }
+                String tableAliasName = tableName.contains(ALIAS_SPLIT)? tableName.split(ALIAS_SPLIT)[1]:tableName;
                 // 获取请求@column的值
                 JSONObject propertis = request.getJSONObject(tableName);
                 String columnsValue = propertis.getString("@orders");
                 if (columnsValue != null) {
                     if (!columnsValue.matches("(\\w+(\\+|\\-)?)+(\\s?,\\s?(\\w+(\\+|\\-)?)+)*")) {
-                        error("字段@orders：" + columnsValue + "格式不符合，正确格式如：column1+,column2-,+表示升序，-表示降序。");
-                        return null;
+                        throw new RuntimeException("字段@orders：" + columnsValue + "格式不符合，正确格式如：column1+,column2-,+表示升序，-表示降序。");
                     }
                     //没有填写@orders字段，默认为全部
                     String[] columnNames = columnsValue.replaceAll("\\s", "").split(",");
@@ -616,19 +551,17 @@ public class APIJSONProvider extends SQLProvider {
         if (getStatementType() == StatementType.INSERT) {
             Set<String> tableNames = request.keySet();
             if (tableNames.size() != 1) {
-                error("新增时，表只能有一个");
-                return null;
+                throw new RuntimeException("新增时，表只能有一个");
             }
-            for (String tableName : tableNames) {
+            for (String tableName:tableNames) {
                 //是否有自定义别名
                 if (tableName.contains(ALIAS_SPLIT)) {
                     //填写了表别名
-                    error("新增时，表不需要有别名");
-                    return null;
+                    throw new RuntimeException("新增时，表不需要有别名");
                 }
                 // 遍历过滤条件
                 JSONObject propertis = request.getJSONObject(tableName);
-                for (String condition : propertis.keySet()) {
+                for (String condition:propertis.keySet()) {
                     //关键字则跳过
                     if (condition.endsWith("@"))
                         continue;
@@ -637,11 +570,9 @@ public class APIJSONProvider extends SQLProvider {
                         validateColumn(tableName, condition);
                         list.add(condition);
                     } else {
-                        error("新增时，" + condition + "必须是字段名");
-                        return null;
+                        throw new RuntimeException("新增时，" + condition + "必须是字段名");
                     }
                 }
-
             }
         }
         return list;
@@ -653,37 +584,33 @@ public class APIJSONProvider extends SQLProvider {
         if (getStatementType() == StatementType.INSERT) {
             Set<String> tableNames = request.keySet();
             if (tableNames.size() != 1) {
-                error("新增时，表只能有一个");
-                return null;
+                throw new RuntimeException("新增时，表只能有一个");
             }
-            for (String tableName : tableNames) {
+            for (String tableName:tableNames) {
                 //是否有自定义别名
                 if (tableName.contains(ALIAS_SPLIT)) {
                     //填写了表别名
-                    error("新增时，表不需要有别名");
-                    return null;
+                    throw new RuntimeException("新增时，表不需要有别名");
                 }
                 // 遍历过滤条件
                 JSONObject propertis = request.getJSONObject(tableName);
                 for (String condition : propertis.keySet()) {
                     //关键字则跳过
-                    if (condition.endsWith("@"))
+                    if (condition.endsWith("@")) {
                         continue;
+                    }
                     if (condition.matches("\\w+")) {
                         //纯字段名
-                        if (propertis.get(condition) instanceof Integer ||
-                                propertis.get(condition) instanceof Float ||
-                                propertis.get(condition) instanceof Double ||
-                                propertis.get(condition) instanceof BigDecimal) {
+                        if (propertis.get(condition) instanceof Integer || propertis.get(condition) instanceof Float ||
+                            propertis.get(condition) instanceof Double || propertis.get(condition) instanceof BigDecimal) {
                             list.add(propertis.get(condition).toString());
                         } else if (propertis.get(condition) instanceof String) {
                             list.add("'" + ((String) propertis.get(condition)).replaceAll("'", "''") + "'");
                         }
                     } else {
-                        error("新增时，" + condition + "必须是字段名");
+                        throw new RuntimeException("新增时，" + condition + "必须是字段名");
                     }
                 }
-
             }
         }
         return list;
@@ -705,15 +632,13 @@ public class APIJSONProvider extends SQLProvider {
         if (getStatementType() == StatementType.UPDATE) {
             Set<String> tableNames = request.keySet();
             if (tableNames.size() != 1) {
-                error("更新时，表只能有一个");
-                return null;
+                throw new RuntimeException("更新时，表只能有一个");
             }
-            for (String tableName : tableNames) {
+            for (String tableName:tableNames) {
                 //是否有自定义别名
                 if (tableName.contains(ALIAS_SPLIT)) {
                     //填写了表别名
-                    error("更新时，表不需要有别名");
-                    return null;
+                    throw new RuntimeException("更新时，表不需要有别名");
                 }
                 // 遍历过滤条件
                 JSONObject propertis = request.getJSONObject(tableName);
@@ -722,10 +647,8 @@ public class APIJSONProvider extends SQLProvider {
                     if (condition.matches("@\\w+")) {
                         //要更新的字段
                         String columnName = condition.replaceAll("@", "");
-                        if (propertis.get(condition) instanceof Integer ||
-                                propertis.get(condition) instanceof Float ||
-                                propertis.get(condition) instanceof Double ||
-                                propertis.get(condition) instanceof BigDecimal) {
+                        if (propertis.get(condition) instanceof Integer || propertis.get(condition) instanceof Float ||
+                            propertis.get(condition) instanceof Double || propertis.get(condition) instanceof BigDecimal) {
                             validateColumn(tableName, columnName);
                             list.add(tableName + "." + columnName + "=" + propertis.get(condition).toString());
                         } else if (propertis.get(condition) instanceof String) {
@@ -734,7 +657,6 @@ public class APIJSONProvider extends SQLProvider {
                         }
                     }
                 }
-
             }
         }
         return list;
@@ -762,11 +684,11 @@ public class APIJSONProvider extends SQLProvider {
     /** 表的黑白名单检查 */
     private void validateTable(String tableName) {
         if (tableBlackSet.contains(tableName)) {
-//            error("请求的表:" + tableName + "在黑名单中");
+//            throw new RuntimeException("请求的表:" + tableName + "在黑名单中");
             return;
         }
         if (tableWhiteSet.contains(tableName)==false) {
-//            error("请求的表:" + tableName + "不在白名单中");
+//            throw new RuntimeException("请求的表:" + tableName + "不在白名单中");
         }
     }
 
@@ -774,13 +696,13 @@ public class APIJSONProvider extends SQLProvider {
     private void validateColumn(String tableName, String columnName) {
         Set<String> columnBlackSet = columnBlackMap.get(tableName);
         if (columnBlackSet!=null && columnBlackSet.contains(columnName)) {
-//            error("请求的字段:" + columnName + "在"+tableName+"黑名单中");
+//            throw new RuntimeException("请求的字段:" + columnName + "在"+tableName+"黑名单中");
             return;
         }
 
         Set<String> columnWhiteSet = columnWhiteMap.get(tableName);
         if (columnWhiteSet==null || columnWhiteSet.contains(columnName)==false) {
-//            error("请求的字段:" + columnName + "不在"+tableName+"表白名单中");
+//            throw new RuntimeException("请求的字段:" + columnName + "不在"+tableName+"表白名单中");
         }
     }
 }

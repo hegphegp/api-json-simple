@@ -23,18 +23,18 @@ public class SQLProvider {
     private List<String> values = new ArrayList();
     private boolean distinct;
 
-    private Message message = new Message();
+//    private Message message = new Message();
 
     /** 消息类，如果Provider中有异常，通过这个方法可以传递消息 */
-    public Message getMessage() {
-        return message;
-    }
+//    public Message getMessage() {
+//        return message;
+//    }
 
     /** 接收错误消息 */
-    public void error(String err) {
-        StackTraceElement ste = new Throwable().getStackTrace()[1];
-        this.message.error(err, ste);
-    }
+//    public void error(String err) {
+//        StackTraceElement ste = new Throwable().getStackTrace()[1];
+//        this.message.error(err, ste);
+//    }
 
     /** StatementType表示要生成的是SELECT,INSERT,UPDATE,DLEETE中的哪种 */
     public StatementType getStatementType() {

@@ -7,7 +7,7 @@ import zuo.biao.apijson.parser.core.SQLProviderException;
 import zuo.biao.apijson.parser.core.StatementType;
 
 public class Main {
-    public static void main(String[] args) throws SQLProviderException {
+    public static void main(String[] args) {
 
 //        String json = "{\n" +
 //                "    \"[]\": { \n" +

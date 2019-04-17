@@ -13,12 +13,12 @@ public class SQLExplorer {
         this.sqlProvider = sqlProvider;
     }
 
-    public String getSQL() throws SQLProviderException {
+    public String getSQL() {
         feedSQLStatement();
-        //异常处理
-        if (!sqlProvider.getMessage().getErrors().isEmpty()) {
-            throw new SQLProviderException(sqlProvider.getMessage().getErrors());
-        }
+//        //异常处理
+//        if (!sqlProvider.getMessage().getErrors().isEmpty()) {
+//            throw new SQLProviderException(sqlProvider.getMessage().getErrors());
+//        }
 
         return sql.assemblySQL();
     }
