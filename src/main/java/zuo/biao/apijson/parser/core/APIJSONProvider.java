@@ -32,7 +32,7 @@ public class APIJSONProvider extends SQLProvider {
         this.request = tabs!=null? tabs:obj;
         this.join = tabs!=null? obj.getJSONObject("join"):new JSONObject();
         tableNames = this.request.keySet();
-        for (String tableName : tableNames) {
+        for (String tableName:tableNames) {
             if (!tableName.matches("(\\w+(:\\w+)?)")) {
                 throw new RuntimeException("表" + tableName + "格式不符合");
             }
@@ -78,11 +78,6 @@ public class APIJSONProvider extends SQLProvider {
         return list;
     }
 
-    /*
-     * ==================================
-     *              查询逻辑
-     * ==================================
-     */
     /**
      * 解析请求中的字段
      * 路径：/表名/@column
@@ -98,65 +93,61 @@ public class APIJSONProvider extends SQLProvider {
     @Override
     public List<String> getSelectFields() {
         List<String> list = new ArrayList();
-        if (getStatementType() == StatementType.SELECT) {
-            Set<String> tableNames = request.keySet();
-            for (String tableName:tableNames) {
-                //是否有自定义别名
-                String tableRealName  = tableName.contains(ALIAS_SPLIT)? tableName.split(ALIAS_SPLIT)[0]:tableName;
-                String tableAliasName = tableName.contains(ALIAS_SPLIT)? tableName.split(ALIAS_SPLIT)[1]:tableName;
-                // 获取请求@column的值
-                JSONObject propertis = request.getJSONObject(tableName);
-                String columnsValue = propertis.getString("@column");
+        if (getStatementType() != StatementType.SELECT) {
+            return list;
+        }
+        for (String tableName:tableNames) {
+            String tableRealName  = tableName.contains(ALIAS_SPLIT)? tableName.split(ALIAS_SPLIT)[0]:tableName;
+            String tableAliasName = tableName.contains(ALIAS_SPLIT)? tableName.split(ALIAS_SPLIT)[1]:tableName;
 
-                if (columnsValue == null) {
-                    validateColumn(tableRealName, "*");
-                    //没有填写@column字段，默认为全部
-                    list.add(tableAliasName + ".*");
-                    continue;
-                }
-                if (!columnsValue.matches("((\\w+\\(\\w+\\):\\w+|\\w+)(:\\w+)?)+(\\s?,\\s?((\\w+\\(\\w+\\):\\w+|\\w+)(:\\w+)?)+)*")) {
-                    throw new RuntimeException("字段@column：" + columnsValue + "格式不符合，正确请求如：a,b,c:d或者a,max(d):d,c:e");
-                }
-                //填写了，则返回tableAliasName.colName或tableAliasName.columnName as columnAliasName
-                String[] columnNames = columnsValue.replaceAll("\\s", "").split(",");
-                for (String columnName:columnNames) {
-                    if (columnName.contains(ALIAS_SPLIT)) {
-                        //填写了字段别名，使用：tableAliasName.columnName as columnAliasName这种类型
-                        //这里columnRealName有两种情况，如：id或max(id)
-                        String functionOrColumn = columnName.split(ALIAS_SPLIT)[0];
-                        if (functionOrColumn.contains("(")) {
-                            //有函数的字段
-                            //去掉)
-                            functionOrColumn = functionOrColumn.replaceAll("\\)", "");
-                            String[] functionStrs = functionOrColumn.split("\\(");
-                            String funcitonName = functionStrs[0];
-                            //要对函数进行控制这这里进行
-                            //此处省略函数合法性检查的代码...
-                            String columnRealName = functionStrs[1];
-                            String columnAliasName = columnName.split(ALIAS_SPLIT)[1];
-                            validateColumn(tableRealName, columnRealName);
-                            if (propertis.getString("id@") != null)
-                                columnAliasName = wrapColumn(tableAliasName, columnAliasName);
-                            list.add(funcitonName + "(" + tableAliasName + "." + columnRealName + ")" + " as " + columnAliasName);
-                        } else {
-                            //没函数的字段
-                            String columnRealName = functionOrColumn;
-                            String columnAliasName = columnName.split(ALIAS_SPLIT)[1];
-                            validateColumn(tableRealName, columnRealName);
-                            if (propertis.getString("id@") != null) {
-                                columnAliasName = wrapColumn(tableAliasName, columnAliasName);
-                            }
-                            list.add(tableAliasName + "." + columnRealName + " as " + columnAliasName);
-                        }
-                    } else {
-                        //使用tableAliasName.columnName类型
-                        validateColumn(tableRealName, columnName);
+            JSONObject propertis = request.getJSONObject(tableName);
+            String columnsValue = propertis.getString("@column");  // 获取请求@column的值
+
+            if (columnsValue == null) {
+                validateColumn(tableRealName, "*");
+                list.add(tableAliasName + ".*"); //没有填写@column字段，默认为全部
+                continue;
+            }
+            if (!columnsValue.matches("((\\w+\\(\\w+\\):\\w+|\\w+)(:\\w+)?)+(\\s?,\\s?((\\w+\\(\\w+\\):\\w+|\\w+)(:\\w+)?)+)*")) {
+                throw new RuntimeException("字段@column：" + columnsValue + "格式不符合，正确请求如：a,b,c:d或者a,max(d):d,c:e");
+            }
+            //填写了，则返回tableAliasName.colName或tableAliasName.columnName as columnAliasName
+            String[] columnNames = columnsValue.replaceAll("\\s", "").split(",");
+            for (String columnName:columnNames) {
+                if (columnName.contains(ALIAS_SPLIT)) {
+                    //填写了字段别名，使用：tableAliasName.columnName as columnAliasName这种类型
+                    //这里columnRealName有两种情况，如：id或max(id)
+                    String functionOrColumn = columnName.split(ALIAS_SPLIT)[0];
+                    if (functionOrColumn.contains("(")) {
+                        //有函数的字段
+                        //去掉)
+                        functionOrColumn = functionOrColumn.replaceAll("\\)", "");
+                        String[] functionStrs = functionOrColumn.split("\\(");
+                        String funcitonName = functionStrs[0];
+                        //要对函数进行控制这这里进行
+                        //此处省略函数合法性检查的代码...
+                        String columnRealName = functionStrs[1];
+                        String columnAliasName = columnName.split(ALIAS_SPLIT)[1];
+                        validateColumn(tableRealName, columnRealName);
                         if (propertis.getString("id@") != null) {
-                            String columnAliasName = wrapColumn(tableAliasName, columnName);
-                            list.add(tableAliasName + "." + columnName + " as " + columnAliasName);
-                        } else {
-                            list.add(tableAliasName + "." + columnName);
+                            columnAliasName = wrapColumn(tableAliasName, columnAliasName);
                         }
+                        list.add(funcitonName + "(" + tableAliasName + "." + columnRealName + ")" + " as " + columnAliasName);
+                    } else { //没函数的字段
+                        String columnRealName = functionOrColumn;
+                        String columnAliasName = columnName.split(ALIAS_SPLIT)[1];
+                        validateColumn(tableRealName, columnRealName);
+                        columnAliasName = propertis.getString("id@") != null? wrapColumn(tableAliasName, columnAliasName): columnAliasName;
+                        list.add(tableAliasName + "." + columnRealName + " as " + columnAliasName);
+                    }
+                } else {
+                    //使用tableAliasName.columnName类型
+                    validateColumn(tableRealName, columnName);
+                    if (propertis.getString("id@") != null) {
+                        String columnAliasName = wrapColumn(tableAliasName, columnName);
+                        list.add(tableAliasName + "." + columnName + " as " + columnAliasName);
+                    } else {
+                        list.add(tableAliasName + "." + columnName);
                     }
                 }
             }
@@ -184,33 +175,22 @@ public class APIJSONProvider extends SQLProvider {
     @Override
     public List<String> getWhere() {
         List<String> list = new ArrayList<>();
-        Set<String> tableNames = request.keySet();
-        for (String tableName : tableNames) {
-            //是否有自定义别名
+        for (String tableName:tableNames) {
             String tableAliasName = tableName.contains(ALIAS_SPLIT)? tableName.split(ALIAS_SPLIT)[1]:tableName;
-            // 遍历过滤条件
-            JSONObject propertis = request.getJSONObject(tableName);
-            conditionLoop:
+            JSONObject propertis = request.getJSONObject(tableName); // 遍历过滤条件
             for (String condition:propertis.keySet()) {
-                //关键字则跳过
-                if (condition.startsWith("@")) {
-                    continue conditionLoop;
-                }
-                if (condition.matches("\\w+")) {
-                    //纯字段名
-                    if (propertis.get(condition) instanceof Integer ||
-                            propertis.get(condition) instanceof Float ||
-                            propertis.get(condition) instanceof Double ||
-                            propertis.get(condition) instanceof BigDecimal) {
+                if (condition.startsWith("@")) { continue; } // 关键字则跳过
+                if (condition.matches("\\w+")) {       // 纯字段名
+                    Object queryValue = propertis.get(condition);
+                    if (queryValue instanceof Integer || queryValue instanceof Float || queryValue instanceof Double || queryValue instanceof BigDecimal) {
                         list.add(tableAliasName + "." + condition + " = " + propertis.get(condition));
                     } else if (propertis.get(condition) instanceof String) {
                         list.add(tableAliasName + "." + condition + " = '" + ((String) propertis.get(condition)).replaceAll("'", "''") + "'");
                     }
-                } else if (condition.matches("(\\w+(!|&|\\|)?\\{\\})+")) {
-                    //表示这是一个多条件类型
+                } else if (condition.matches("(\\w+(!|&|\\|)?\\{\\})+")) {  //表示这是一个多条件类型
                     if (propertis.get(condition) instanceof String) {
                         String exp = (String) propertis.get(condition);
-                        //是否匹配这种类型：<20.3,>3.3,=3.3
+                        // 是否匹配这种类型：<20.3,>3.3,=3.3
                         if (!exp.matches("(\\s?(>|<|>=|<=|=|<>)+\\s?((\\-|\\+)?\\d+(\\.\\d+)?)+)+(\\s?,\\s?((>|<|>=|<=|=|<>)+\\s?((\\-|\\+)?\\d+(\\.\\d+)?)))*")) {
                             throw new RuntimeException(condition + "的格式不正确，正确使用方式如: >10,<20");
                         }
@@ -226,16 +206,14 @@ public class APIJSONProvider extends SQLProvider {
                         }
                     } else if (propertis.get(condition) instanceof JSONArray) {
                         JSONArray array = (JSONArray) propertis.get(condition);
-                        //分离出字段名
-                        String columnName = condition.replaceAll("\\{\\}", "").replaceAll("&", "").replaceAll("!", "");
+                        String columnName = condition.replaceAll("\\{\\}", "").replaceAll("&", "").replaceAll("!", ""); // 分离出字段名
                         if (condition.endsWith("!{}")) {
                             assemblyArrConditions(list, array, tableAliasName, columnName, false);
                         } else {
                             assemblyArrConditions(list, array, tableAliasName, columnName, true);
                         }
                     }
-                } else if (condition.matches("\\w+~")) {
-                    //字符串查询，包含
+                } else if (condition.matches("\\w+~")) { // 字符串查询，包含
                     if (propertis.get(condition) instanceof String) {
                         String exp = (String) propertis.get(condition);
                         String columnName = condition.replaceAll("~", "");
@@ -243,8 +221,7 @@ public class APIJSONProvider extends SQLProvider {
                     } else {
                         throw new RuntimeException(condition + "的值必须要是字符串");
                     }
-                } else if (condition.matches("\\w+\\$")) {
-                    //字符串查询，LIKE
+                } else if (condition.matches("\\w+\\$")) { // 字符串查询，LIKE
                     if (propertis.get(condition) instanceof String) {
                         String exp = (String) propertis.get(condition);
                         String columnName = condition.replaceAll("\\$", "");
@@ -252,8 +229,7 @@ public class APIJSONProvider extends SQLProvider {
                     } else {
                         throw new RuntimeException(condition + "的值必须要是字符串");
                     }
-                } else if (condition.matches("\\w+\\?")) {
-                    //字符串查询，正则
+                } else if (condition.matches("\\w+\\?")) { // 字符串查询，正则
                     if (propertis.get(condition) instanceof String) {
                         String exp = (String) propertis.get(condition);
                         String columnName = condition.replaceAll("\\?", "");
@@ -261,8 +237,7 @@ public class APIJSONProvider extends SQLProvider {
                     } else {
                         throw new RuntimeException(condition + "的值必须要是字符串");
                     }
-                } else if (condition.matches("\\w+@")) {
-                    //内连接
+                } else if (condition.matches("\\w+@")) { // 内连接
                     if (propertis.get(condition) instanceof String) {
                         String exp = (String) propertis.get(condition);
                         String columnName = condition.replaceAll("@", "");
@@ -479,12 +454,7 @@ public class APIJSONProvider extends SQLProvider {
     public List<String> getGroupBy() {
         List<String> list = new ArrayList<>();
         if (getStatementType() == StatementType.SELECT) {
-            Set<String> tableNames = request.keySet();
             for (String tableName : tableNames) {
-                //格式检查
-                if (!tableName.matches("(\\w+(:\\w+)?)")) {
-                    throw new RuntimeException("表" + tableName + "格式不符合");
-                }
                 //是否有自定义别名
                 String tableAliasName = tableName.contains(ALIAS_SPLIT)? tableName.split(ALIAS_SPLIT)[1]:tableName;
                 // 获取请求@group的值
@@ -510,16 +480,9 @@ public class APIJSONProvider extends SQLProvider {
     public List<String> getOrderBy() {
         List<String> list = new ArrayList<>();
         if (getStatementType() == StatementType.SELECT) {
-            Set<String> tableNames = request.keySet();
             for (String tableName : tableNames) {
-                //格式检查
-                if (!tableName.matches("(\\w+(:\\w+)?)")) {
-                    throw new RuntimeException("表" + tableName + "格式不符合");
-                }
-                //是否有自定义别名
                 String tableAliasName = tableName.contains(ALIAS_SPLIT)? tableName.split(ALIAS_SPLIT)[1]:tableName;
-                // 获取请求@column的值
-                JSONObject propertis = request.getJSONObject(tableName);
+                JSONObject propertis = request.getJSONObject(tableName); // 获取请求@column的值
                 String columnsValue = propertis.getString("@orders");
                 if (columnsValue != null) {
                     if (!columnsValue.matches("(\\w+(\\+|\\-)?)+(\\s?,\\s?(\\w+(\\+|\\-)?)+)*")) {
@@ -540,33 +503,23 @@ public class APIJSONProvider extends SQLProvider {
         return list;
     }
 
-    /*
-     * ==================================
-     *              新增逻辑
-     * ==================================
-     */
     @Override
-    public List<String> getColumns() {
+    public List<String> getInsertFields() {
         List<String> list = new ArrayList<>();
         if (getStatementType() == StatementType.INSERT) {
-            Set<String> tableNames = request.keySet();
             if (tableNames.size() != 1) {
                 throw new RuntimeException("新增时，表只能有一个");
             }
             for (String tableName:tableNames) {
-                //是否有自定义别名
-                if (tableName.contains(ALIAS_SPLIT)) {
-                    //填写了表别名
-                    throw new RuntimeException("新增时，表不需要有别名");
+                if (tableName.contains(ALIAS_SPLIT)) {                   // 是否有自定义别名
+                    throw new RuntimeException("新增时，表不需要有别名");    // 填写了表别名
                 }
-                // 遍历过滤条件
-                JSONObject propertis = request.getJSONObject(tableName);
+                JSONObject propertis = request.getJSONObject(tableName);  // 遍历过滤条件
                 for (String condition:propertis.keySet()) {
-                    //关键字则跳过
-                    if (condition.endsWith("@"))
+                    if (condition.endsWith("@")) {                        // 关键字则跳过
                         continue;
-                    if (condition.matches("\\w+")) {
-                        //纯字段名
+                    }
+                    if (condition.matches("\\w+")) {  // 纯字段名
                         validateColumn(tableName, condition);
                         list.add(condition);
                     } else {
@@ -592,15 +545,12 @@ public class APIJSONProvider extends SQLProvider {
                     //填写了表别名
                     throw new RuntimeException("新增时，表不需要有别名");
                 }
-                // 遍历过滤条件
                 JSONObject propertis = request.getJSONObject(tableName);
-                for (String condition : propertis.keySet()) {
-                    //关键字则跳过
-                    if (condition.endsWith("@")) {
+                for (String condition : propertis.keySet()) { // 遍历过滤条件
+                    if (condition.endsWith("@")) { //关键字则跳过
                         continue;
                     }
-                    if (condition.matches("\\w+")) {
-                        //纯字段名
+                    if (condition.matches("\\w+")) { //纯字段名
                         if (propertis.get(condition) instanceof Integer || propertis.get(condition) instanceof Float ||
                             propertis.get(condition) instanceof Double || propertis.get(condition) instanceof BigDecimal) {
                             list.add(propertis.get(condition).toString());
@@ -616,11 +566,6 @@ public class APIJSONProvider extends SQLProvider {
         return list;
     }
 
-    /*
-     * ==================================
-     *              修改逻辑
-     * ==================================
-     */
     /**
      * 更新字段
      * "@description": "20190101,元旦快乐"
@@ -629,32 +574,27 @@ public class APIJSONProvider extends SQLProvider {
     @Override
     public List<String> getUpdateFields() {
         List<String> list = new ArrayList<>();
-        if (getStatementType() == StatementType.UPDATE) {
-            Set<String> tableNames = request.keySet();
-            if (tableNames.size() != 1) {
-                throw new RuntimeException("更新时，表只能有一个");
+        if (getStatementType() != StatementType.UPDATE) {
+            return list;
+        }
+        if (tableNames.size() != 1) {
+            throw new RuntimeException("更新时，表只能有一个");
+        }
+        for (String tableName:tableNames) {
+            if (tableName.contains(ALIAS_SPLIT)) {  //是否有自定义别名
+                throw new RuntimeException("更新时，表不需要有别名");
             }
-            for (String tableName:tableNames) {
-                //是否有自定义别名
-                if (tableName.contains(ALIAS_SPLIT)) {
-                    //填写了表别名
-                    throw new RuntimeException("更新时，表不需要有别名");
-                }
-                // 遍历过滤条件
-                JSONObject propertis = request.getJSONObject(tableName);
-                for (String condition : propertis.keySet()) {
-                    //关键字则跳过
-                    if (condition.matches("@\\w+")) {
-                        //要更新的字段
-                        String columnName = condition.replaceAll("@", "");
-                        if (propertis.get(condition) instanceof Integer || propertis.get(condition) instanceof Float ||
-                            propertis.get(condition) instanceof Double || propertis.get(condition) instanceof BigDecimal) {
-                            validateColumn(tableName, columnName);
-                            list.add(tableName + "." + columnName + "=" + propertis.get(condition).toString());
-                        } else if (propertis.get(condition) instanceof String) {
-                            validateColumn(tableName, columnName);
-                            list.add(tableName + "." + columnName + "=" + "'" + ((String) propertis.get(condition)).replaceAll("'", "''") + "'");
-                        }
+            JSONObject propertis = request.getJSONObject(tableName); // 遍历过滤条件
+            for (String condition:propertis.keySet()) {
+                if (condition.matches("@\\w+")) { //关键字则跳过
+                    String columnName = condition.replaceAll("@", "");  //要更新的字段
+                    if (propertis.get(condition) instanceof Integer || propertis.get(condition) instanceof Float ||
+                        propertis.get(condition) instanceof Double || propertis.get(condition) instanceof BigDecimal) {
+                        validateColumn(tableName, columnName);
+                        list.add(tableName + "." + columnName + "=" + propertis.get(condition).toString());
+                    } else if (propertis.get(condition) instanceof String) {
+                        validateColumn(tableName, columnName);
+                        list.add(tableName + "." + columnName + "=" + "'" + ((String) propertis.get(condition)).replaceAll("'", "''") + "'");
                     }
                 }
             }

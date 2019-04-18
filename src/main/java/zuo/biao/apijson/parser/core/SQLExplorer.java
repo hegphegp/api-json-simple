@@ -44,7 +44,7 @@ public class SQLExplorer {
         sql.groupBy.addAll(ofNullable(sqlProvider.getGroupBy()));
         sql.orderBy.addAll(ofNullable(sqlProvider.getOrderBy()));
         sql.lastList.addAll(ofNullable(sqlProvider.getLastList()));
-        sql.columns.addAll(ofNullable(sqlProvider.getColumns()));
+        sql.columns.addAll(ofNullable(sqlProvider.getInsertFields()));
         sql.values.addAll(ofNullable(sqlProvider.getValues()));
     }
 

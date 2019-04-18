@@ -8,6 +8,7 @@ public class SQLProvider {
     private StatementType statementType;
     private List<String> updateFields = new ArrayList();
     private List<String> selectFields = new ArrayList();
+    private List<String> insertFields = new ArrayList();
     private List<String> tables = new ArrayList();
     private List<String> join = new ArrayList();
     private List<String> innerJoin = new ArrayList();
@@ -19,22 +20,8 @@ public class SQLProvider {
     private List<String> groupBy = new ArrayList();
     private List<String> orderBy = new ArrayList();
     private List<String> lastList = new ArrayList();
-    private List<String> columns = new ArrayList();
     private List<String> values = new ArrayList();
     private boolean distinct;
-
-//    private Message message = new Message();
-
-    /** 消息类，如果Provider中有异常，通过这个方法可以传递消息 */
-//    public Message getMessage() {
-//        return message;
-//    }
-
-    /** 接收错误消息 */
-//    public void error(String err) {
-//        StackTraceElement ste = new Throwable().getStackTrace()[1];
-//        this.message.error(err, ste);
-//    }
 
     /** StatementType表示要生成的是SELECT,INSERT,UPDATE,DLEETE中的哪种 */
     public StatementType getStatementType() {
@@ -104,8 +91,8 @@ public class SQLProvider {
     }
 
     /** StatementType为INSERT时，SQL新增的字段 */
-    public List<String> getColumns() {
-        return columns;
+    public List<String> getInsertFields() {
+        return insertFields;
     }
 
     /** StatementType为INSERT时，SQL新增字段所对应的值 */
@@ -169,8 +156,8 @@ public class SQLProvider {
         this.lastList = lastList;
     }
 
-    public void setColumns(List<String> columns) {
-        this.columns = columns;
+    public void setInsertFields(List<String> insertFields) {
+        this.insertFields = insertFields;
     }
 
     public void setValues(List<String> values) {
