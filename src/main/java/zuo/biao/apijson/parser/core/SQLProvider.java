@@ -23,7 +23,7 @@ public class SQLProvider {
     private List<String> values = new ArrayList();
     private boolean distinct;
 
-    /** StatementType表示要生成的是SELECT,INSERT,UPDATE,DLEETE中的哪种 */
+    /** StatementType表示要生成的是SELECT,INSERT,UPDATE,DELETE中的哪种 */
     public StatementType getStatementType() {
         return statementType;
     }
@@ -32,6 +32,37 @@ public class SQLProvider {
         this.statementType = statementType;
     }
 
+    public boolean isSelectOperation() {
+        if (StatementType.SELECT==statementType) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    public boolean isInsertOperation() {
+        if (StatementType.INSERT==statementType) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    public boolean isUpdateOperation() {
+        if (StatementType.UPDATE==statementType) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    public boolean isDeleteOperation() {
+        if (StatementType.DELETE==statementType) {
+            return true;
+        } else {
+            return false;
+        }
+    }
     /** StatementType为UPDATE时，UPDATE要更新的字段 */
     public List<String> getUpdateFields() {
         return updateFields;
