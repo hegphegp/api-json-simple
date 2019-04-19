@@ -2,7 +2,6 @@ package zuo.biao.apijson.parser.core;
 
 import java.math.BigDecimal;
 import java.util.*;
-import java.util.stream.Collectors;
 
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
@@ -18,7 +17,7 @@ public class APIJSONProvider extends SQLProvider {
     public Set<String> tableBlackSet = new HashSet();
     public Map<String,Set<String>> columnWhiteMap = new HashMap();
     public Map<String,Set<String>> columnBlackMap = new HashMap();
-
+    public Map<String,String> aliasNameMap = new LinkedHashMap<>();
     private Set<String> tableNames;
     private JSONObject request;
     private JSONObject join;
@@ -35,6 +34,9 @@ public class APIJSONProvider extends SQLProvider {
         for (String tableName:tableNames) {
             if (!tableName.matches("(\\w+(:\\w+)?)")) {
                 throw new RuntimeException("表" + tableName + "格式不符合");
+            } else {
+                Table table = new Table(tableName);
+                aliasNameMap.put(table.aliasName, table.realName);
             }
         }
     }
@@ -50,13 +52,16 @@ public class APIJSONProvider extends SQLProvider {
      */
     @Override
     public List<String> getTables() {
-        List<String> list = new ArrayList<>();
-        for (String tableName : tableNames) {
+        List<String> tableNameList = new ArrayList<>();
+        for (String tableName:tableNames) {
             Table table = new Table(tableName);
             validateTable(table.realName);
-            list.add(isSelectOperation()? table.realName+" "+table.aliasName:table.realName);
+            tableNameList.add(isSelectOperation()? table.realName+" "+table.aliasName:table.realName);
         }
-        for (String str:list.stream().collect(Collectors.toSet())) {
+        if (isSelectOperation()==false) {
+            return tableNameList;
+        }
+        for (String str:new HashSet<>(tableNameList)) {
             String[] arr = str.split(" ");
             for (String joinKey:checkJoin) {
                 JSONArray array = join.getJSONArray(joinKey);
@@ -64,12 +69,12 @@ public class APIJSONProvider extends SQLProvider {
                 for (Object obj:array) {
                     String joinTableName = obj instanceof String ? (String) obj:"";
                     if (joinTableName.startsWith(arr[0]) || joinTableName.startsWith(arr[1])) {
-                        list.remove(str);
+                        tableNameList.remove(str);
                     }
                 }
             }
         }
-        return list;
+        return tableNameList;
     }
 
     /**
@@ -92,7 +97,7 @@ public class APIJSONProvider extends SQLProvider {
             Table table = new Table(tableName);
 
             JSONObject propertis = request.getJSONObject(tableName);
-            String columnsValue = propertis.getString("@column");  // 获取请求@column的值
+            String columnsValue = propertis.getString("@column");
 
             if (columnsValue == null) {
                 validateColumn(table.realName, "*");
@@ -338,7 +343,12 @@ public class APIJSONProvider extends SQLProvider {
 //                            String leftTable = tcs[0].split("\\.")[0];
 //                            String rightTable = tcs[1].split("\\.")[0];
                     validateTable(tcs[0].split("\\.")[0]);
-                    list.add(tcs[0].split("\\.")[0] + " ON " + joinStr);
+                    String tableName = tcs[0].split("\\.")[0];
+                    if (aliasNameMap.get(tableName)!=null) {
+                        list.add(aliasNameMap.get(tableName) + " "+ tableName + " ON " + joinStr);
+                    } else {
+                        list.add(tableName + " ON " + joinStr);
+                    }
                 } else {
                     throw new RuntimeException("@leftOuterJoin的格式必须是：table1.column1 = table2.column2,相当于LEFT OUTER JOIN table1 ON table1.column1=table2.column2");
                 }

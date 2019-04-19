@@ -32,13 +32,15 @@ public class Main {
         String json = "{ "                                                   + "\r\n" +
                 "    '[]': { "                                               + "\r\n" +
                 "        'table1': { "                                       + "\r\n" +
-                "            '@column': 'code,name', "                       + "\r\n" +
+                "            '@column': 'code:ss,name:sss', "                + "\r\n" +
                 "            'code': 'C86L', "                               + "\r\n" +
                 "            'name': 'name' "                                + "\r\n" +
                 "        }, "                                                + "\r\n" +
                 "        'table2:t2': {"                                     + "\r\n" +
                 "            '@column': 'id,docno',"                         + "\r\n" +
-                "            'docno': 'docno' "                              + "\r\n" +
+                "            'docno': 'docno',"                              + "\r\n" +
+                "            'name~': 'abcd',"                               + "\r\n" +
+                "            '@group': 'name'"                               + "\r\n" +
                 "        },"                                                 + "\r\n" +
                 "        'table3:t3': {"                                     + "\r\n" +
                 "            '@column': 'id,docno'"                          + "\r\n" +
