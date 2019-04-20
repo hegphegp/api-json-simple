@@ -60,8 +60,8 @@ public class Main {
         json = json.replaceAll("'", "\"");
         System.out.println(json);
         JSONObject req = JSONObject.parseObject(json);
-        APIJSONProvider apijsonProvider = new APIJSONProvider(req);
-        apijsonProvider.setStatementType(StatementType.SELECT);
+        APIJSONProvider apijsonProvider = new APIJSONProvider(req, StatementType.SELECT);
+//        apijsonProvider.setStatementType(StatementType.SELECT);
 //        apijsonProvider.setStatementType(StatementType.SELECT);
 ////		apijsonProvider.getTableBlackSet().add("Retail");
 ////		apijsonProvider.getTableWhiteSet().add("Retail");

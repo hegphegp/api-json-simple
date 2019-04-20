@@ -45,7 +45,7 @@ public class SQLExplorer {
         sql.orderBy.addAll(ofNullable(sqlProvider.getOrderBy()));
         sql.lastList.addAll(ofNullable(sqlProvider.getLastList()));
         sql.columns.addAll(ofNullable(sqlProvider.getInsertFields()));
-        sql.values.addAll(ofNullable(sqlProvider.getValues()));
+        sql.values.addAll(ofNullable(sqlProvider.getInsertValues()));
     }
 
     private List<String> ofNullable(List<String> list) {

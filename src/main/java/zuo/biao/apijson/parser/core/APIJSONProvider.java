@@ -22,21 +22,32 @@ public class APIJSONProvider extends SQLProvider {
     private JSONObject request;
     private JSONObject join;
 
+    private APIJSONProvider() { }
+
     /** 传入的参数应该是一个通过验证的APIJSON请求 */
-    public APIJSONProvider(JSONObject obj) {
+    public APIJSONProvider(JSONObject obj, StatementType statementType) {
         if (obj == null) {
             throw new RuntimeException("APIJSONProvider传入的请求不能为空");
         }
+        super.setStatementType(statementType);
         JSONObject tabs = obj.getJSONObject("[]");
         this.request = tabs!=null? tabs:obj;
         this.join = tabs!=null? obj.getJSONObject("join"):new JSONObject();
         tableNames = this.request.keySet();
         for (String tableName:tableNames) {
+            if (StatementType.INSERT==statementType && tableName.contains(ALIAS_SPLIT)) {  // 是否有自定义别名
+                throw new RuntimeException("新增时，表不需要有别名");                          // 填写了表别名
+            }
             if (!tableName.matches("(\\w+(:\\w+)?)")) {
                 throw new RuntimeException("表" + tableName + "格式不符合");
             } else {
                 Table table = new Table(tableName);
                 aliasNameMap.put(table.aliasName, table.realName);
+            }
+        }
+        if (StatementType.INSERT==statementType || StatementType.UPDATE==statementType) {
+            if (tableNames.size() != 1) {
+                throw new RuntimeException("新增或者更新时，表只能有一个");
             }
         }
     }
@@ -60,26 +71,24 @@ public class APIJSONProvider extends SQLProvider {
      */
     @Override
     public List<String> getTables() {
-        List<String> tableNameList = new ArrayList<>();
+        List<String> tableNameList = new ArrayList();
         for (String tableName:tableNames) {
             Table table = new Table(tableName);
             validateTable(table.realName);
-            tableNameList.add(isSelectOperation()? table.realName+" "+table.aliasName:table.realName);
-        }
-        if (isSelectOperation()==false) {
-            return tableNameList;
-        }
-        for (String str:new HashSet<>(tableNameList)) {
-            String[] arr = str.split(" ");
-            for (String joinKey: tableJoinTypes) {
-                JSONArray array = join.getJSONArray(joinKey);
-                array = array!=null? array:new JSONArray();
-                for (Object obj:array) {
-                    String joinTableName = obj instanceof String ? (String) obj:"";
-                    if (joinTableName.startsWith(arr[0]) || joinTableName.startsWith(arr[1])) {
-                        tableNameList.remove(str);
+            if (isSelectOperation()) {
+                tableNameList.add(table.realName+" "+table.aliasName);
+                for (String joinKey: tableJoinTypes) {
+                    JSONArray array = join.getJSONArray(joinKey)!=null? join.getJSONArray(joinKey):new JSONArray();
+                    for (Object obj:array) {
+                        String joinTableName = obj instanceof String ? (String) obj:"";
+                        if (joinTableName.startsWith(table.realName) || joinTableName.startsWith(table.aliasName)) {
+                            tableNameList.remove(table.realName+" "+table.aliasName);
+                            continue;
+                        }
                     }
                 }
+            } else {
+                tableNameList.add(table.realName);
             }
         }
         return tableNameList;
@@ -378,7 +387,7 @@ public class APIJSONProvider extends SQLProvider {
                 }
                 String[] columnNames = columnsValue.replaceAll("\\s", "").split(",");
                 for (String colmunName : columnNames) {
-                    list.add(new Table(tableName).realName + "." + colmunName);
+                    list.add(new Table(tableName).aliasName + "." + colmunName);
                 }
             }
 
@@ -417,18 +426,10 @@ public class APIJSONProvider extends SQLProvider {
     public List<String> getInsertFields() {
         List<String> list = new ArrayList();
         if (isInsertOperation()==false) { return list; }
-        if (tableNames.size() != 1) {
-            throw new RuntimeException("新增时，表只能有一个");
-        }
         for (String tableName:tableNames) {
-            if (tableName.contains(ALIAS_SPLIT)) {                   // 是否有自定义别名
-                throw new RuntimeException("新增时，表不需要有别名");    // 填写了表别名
-            }
             JSONObject propertis = request.getJSONObject(tableName);  // 遍历过滤条件
             for (String condition:propertis.keySet()) {
-                if (condition.endsWith("@")) {                        // 关键字则跳过
-                    continue;
-                }
+                if (condition.endsWith("@")) { continue; }            // 关键字则跳过
                 if (condition.matches("\\w+")) {  // 纯字段名
                     validateColumn(tableName, condition);
                     list.add(condition);
@@ -441,27 +442,19 @@ public class APIJSONProvider extends SQLProvider {
     }
 
     @Override
-    public List<String> getValues() {
+    public List<String> getInsertValues() {
         List<String> list = new ArrayList();
         if (isInsertOperation()==false) { return list; }
-        if (tableNames.size() != 1) {
-            throw new RuntimeException("新增时，表只能有一个");
-        }
         for (String tableName:tableNames) {
-            if (tableName.contains(ALIAS_SPLIT)) {
-                throw new RuntimeException("新增时，表不需要有别名");
-            }
             JSONObject propertis = request.getJSONObject(tableName);
-            for (String condition : propertis.keySet()) { // 遍历过滤条件
-                if (condition.endsWith("@")) { //关键字则跳过
-                    continue;
-                }
-                if (condition.matches("\\w+")) { //纯字段名
-                    if (propertis.get(condition) instanceof Integer || propertis.get(condition) instanceof Float ||
-                            propertis.get(condition) instanceof Double || propertis.get(condition) instanceof BigDecimal) {
-                        list.add(propertis.get(condition).toString());
-                    } else if (propertis.get(condition) instanceof String) {
-                        list.add("'" + ((String) propertis.get(condition)).replaceAll("'", "''") + "'");
+            for (String condition : propertis.keySet()) {   // 遍历过滤条件
+                if (condition.endsWith("@")) { continue; }  // 关键字则跳过
+                if (condition.matches("\\w+")) {      // 纯字段名
+                    Object condValue = propertis.get(condition);
+                    if (condValue instanceof Integer || condValue instanceof Float || condValue instanceof Double || condValue instanceof BigDecimal) {
+                        list.add(condValue.toString());
+                    } else if (condValue instanceof String) {
+                        list.add("'" + ((String) condValue).replaceAll("'", "''") + "'");
                     }
                 } else {
                     throw new RuntimeException("新增时，" + condition + "必须是字段名");
@@ -480,24 +473,21 @@ public class APIJSONProvider extends SQLProvider {
     public List<String> getUpdateFields() {
         List<String> list = new ArrayList();
         if (isUpdateOperation()==false) { return list; }
-        if (tableNames.size() != 1) {
-            throw new RuntimeException("更新时，表只能有一个");
-        }
         for (String tableName:tableNames) {
-            if (tableName.contains(ALIAS_SPLIT)) {  //是否有自定义别名
+            if (tableName.contains(ALIAS_SPLIT)) {                   // 是否有自定义别名
                 throw new RuntimeException("更新时，表不需要有别名");
             }
             JSONObject propertis = request.getJSONObject(tableName); // 遍历过滤条件
             for (String condition:propertis.keySet()) {
-                if (condition.matches("@\\w+")) { //关键字则跳过
-                    String columnName = condition.replaceAll("@", "");  //要更新的字段
-                    if (propertis.get(condition) instanceof Integer || propertis.get(condition) instanceof Float ||
-                        propertis.get(condition) instanceof Double || propertis.get(condition) instanceof BigDecimal) {
+                if (condition.matches("@\\w+")) { // 关键字则跳过
+                    String columnName = condition.replaceAll("@", "");  // 要更新的字段
+                    Object condValue = propertis.get(condition);
+                    if (condValue instanceof Integer || condValue instanceof Float || condValue instanceof Double || condValue instanceof BigDecimal) {
                         validateColumn(tableName, columnName);
-                        list.add(tableName + "." + columnName + "=" + propertis.get(condition).toString());
+                        list.add(tableName + "." + columnName + "=" + condValue.toString());
                     } else if (propertis.get(condition) instanceof String) {
                         validateColumn(tableName, columnName);
-                        list.add(tableName + "." + columnName + "=" + "'" + ((String) propertis.get(condition)).replaceAll("'", "''") + "'");
+                        list.add(tableName + "." + columnName + "=" + "'" + ((String) condValue).replaceAll("'", "''") + "'");
                     }
                 }
             }

@@ -127,7 +127,7 @@ public class SQLProvider {
     }
 
     /** StatementType为INSERT时，SQL新增字段所对应的值 */
-    public List<String> getValues() {
+    public List<String> getInsertValues() {
         return values;
     }
 
