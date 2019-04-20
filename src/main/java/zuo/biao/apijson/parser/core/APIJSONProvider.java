@@ -41,7 +41,15 @@ public class APIJSONProvider extends SQLProvider {
         }
     }
 
-    private String[] checkJoin = {"@innerJoin", "@leftOuterJoin", "@rightOuterJoin", "@join", "@outerJoin"};
+    private static final Map<String, String> tableJoinConvertMap = new HashMap<String, String>(){{
+        put("@innerJoin","INNER JOIN");
+        put("@leftOuterJoin","LEFT OUTER JOIN");
+        put("@rightOuterJoin","RIGHT OUTER JOIN");
+        put("@join","JOIN");
+        put("@outerJoin","OUTER JOIN");
+    }};
+    private static final Set<String> tableJoinTypes = tableJoinConvertMap.keySet();
+
     /**
      * 解析请求中的表名
      * 表名必须符合：(\w+(:\w+)?)
@@ -63,7 +71,7 @@ public class APIJSONProvider extends SQLProvider {
         }
         for (String str:new HashSet<>(tableNameList)) {
             String[] arr = str.split(" ");
-            for (String joinKey:checkJoin) {
+            for (String joinKey: tableJoinTypes) {
                 JSONArray array = join.getJSONArray(joinKey);
                 array = array!=null? array:new JSONArray();
                 for (Object obj:array) {
@@ -302,142 +310,54 @@ public class APIJSONProvider extends SQLProvider {
      */
     @Override
     public List<String> getInnerJoin() {
-        List<String> list = new ArrayList<>();
-        if (isSelectOperation()==false) { return list; }
-        if (join != null && join.get("@innerJoin") != null) {
-            JSONArray stms = join.getJSONArray("@innerJoin");
-            for (int i = 0; i < stms.size(); i++) {
-                Object obj = stms.get(i);
-                if (obj instanceof String) {
-                    String joinStr = (String) obj;
-                    if (joinStr.matches("\\w+\\.\\w+\\s?=\\s?\\w+\\.\\w+")) {
-//                            table1.column1 = table2.column2
-                        String[] tcs = joinStr.replaceAll("\\s", "").split("=");
-//                            String leftTable = tcs[0].split("\\.")[0];
-//                            String rightTable = tcs[1].split("\\.")[0];
-                        validateTable(tcs[0].split("\\.")[0]);
-                        list.add(tcs[0].split("\\.")[0] + " ON " + joinStr);
-                    } else {
-                        throw new RuntimeException("@innerJoin的格式必须是：table1.column1 = table2.column2,相当于INNER JOIN table1 ON table1.column1=table2.column2");
-                    }
-                } else {
-                    throw new RuntimeException("@innerJoin的类型必须是String类型，填写的值如：table1.column1 = table2.column2,相当于INNER JOIN table1 ON table1.column1=table2.column2。注意：表有别名的应该写表别名");
-                }
-            }
-        }
-        return list;
+        return dealJoin("@innerJoin");
     }
 
     /** 左外连接 */
     @Override
     public List<String> getLeftOuterJoin() {
-        List<String> list = new ArrayList<>();
-        if (isSelectOperation()==false) { return list; }
-        JSONArray stms = join.get("@leftOuterJoin")!= null? join.getJSONArray("@leftOuterJoin"):new JSONArray();
-        for (int i = 0; i < stms.size(); i++) {
-            if (stms.get(i) instanceof String) {
-                String joinStr = (String) stms.get(i);
-                if (joinStr.matches("\\w+\\.\\w+\\s?=\\s?\\w+\\.\\w+")) {
-//                        table1.column1 = table2.column2
-                    String[] tcs = joinStr.replaceAll("\\s", "").split("=");
-//                            String leftTable = tcs[0].split("\\.")[0];
-//                            String rightTable = tcs[1].split("\\.")[0];
-                    validateTable(tcs[0].split("\\.")[0]);
-                    String tableName = tcs[0].split("\\.")[0];
-                    if (aliasNameMap.get(tableName)!=null) {
-                        list.add(aliasNameMap.get(tableName) + " "+ tableName + " ON " + joinStr);
-                    } else {
-                        list.add(tableName + " ON " + joinStr);
-                    }
-                } else {
-                    throw new RuntimeException("@leftOuterJoin的格式必须是：table1.column1 = table2.column2,相当于LEFT OUTER JOIN table1 ON table1.column1=table2.column2");
-                }
-            } else {
-                throw new RuntimeException("@leftOuterJoin的类型必须是String类型，填写的值如：table1.column1 = table2.column2,相当于LEFT OUTER JOIN table1 ON table1.column1=table2.column2。注意：表有别名的应该写表别名");
-            }
-        }
-        return list;
+        return dealJoin("@leftOuterJoin");
     }
 
     /** 右外链接 */
     @Override
     public List<String> getRightOuterJoin() {
-        List<String> list = new ArrayList<>();
-        if (isSelectOperation()==false) { return list; }
-        JSONArray stms = join.get("@rightOuterJoinv")!= null? join.getJSONArray("@rightOuterJoin"):new JSONArray();
-        for (int i = 0; i < stms.size(); i++) {
-            Object obj = stms.get(i);
-            if (obj instanceof String) {
-                String joinStr = (String) obj;
-                if (joinStr.matches("\\w+\\.\\w+\\s?=\\s?\\w+\\.\\w+")) {
-//                        table1.column1 = table2.column2
-                    String[] tcs = joinStr.replaceAll("\\s", "").split("=");
-//                        String leftTable = tcs[0].split("\\.")[0];
-//                        String rightTable = tcs[1].split("\\.")[0];
-                    validateTable(tcs[0].split("\\.")[0]);
-                    list.add(tcs[0].split("\\.")[0] + " ON " + joinStr);
-                } else {
-                    throw new RuntimeException("@rightOuterJoin的格式必须是：table1.column1 = table2.column2,相当于RIGHT OUTER JOIN table1 ON table1.column1=table2.column2");
-                }
-            } else {
-                throw new RuntimeException("@rightOuterJoin的类型必须是String类型，填写的值如：table1.column1 = table2.column2,相当于RIGHT OUTER JOIN table1 ON table1.column1=table2.column2。注意：表有别名的应该写表别名");
-            }
-        }
-        return list;
+        return dealJoin("@rightOuterJoin");
     }
 
     /** join连接 */
     @Override
     public List<String> getJoin() {
-        List<String> list = new ArrayList();
-        if (isSelectOperation()==false) { return list; }
-        if (join != null && join.get("@join") != null) {
-            JSONArray stms = join.getJSONArray("@join");
-            for (int i = 0; i < stms.size(); i++) {
-                Object obj = stms.get(i);
-                if (obj instanceof String) {
-                    String joinStr = (String) obj;
-                    if (joinStr.matches("\\w+\\.\\w+\\s?=\\s?\\w+\\.\\w+")) {
-                        //table1.column1 = table2.column2
-                        String[] tcs = joinStr.replaceAll("\\s", "").split("=");
-//                            String leftTable = tcs[0].split("\\.")[0];
-//                            String rightTable = tcs[1].split("\\.")[0];
-                        validateTable(tcs[0].split("\\.")[0]);
-                        list.add(tcs[0].split("\\.")[0] + " ON " + joinStr);
-                    } else {
-                        throw new RuntimeException("@join的格式必须是：table1.column1 = table2.column2,相当于JOIN table1 ON table1.column1=table2.column2");
-                    }
-                } else {
-                    throw new RuntimeException("@join的类型必须是String类型，填写的值如：table1.column1 = table2.column2,相当于JOIN table1 ON table1.column1=table2.column2。注意：表有别名的应该写表别名");
-                }
-            }
-        }
-        return list;
+        return dealJoin("@join");
     }
 
     /** 外连接 */
     @Override
     public List<String> getOuterJoin() {
-        List<String> list = new ArrayList();
+        return dealJoin("@outerJoin");
+    }
+
+    public List<String> dealJoin(String joinType) {
+        List<String> list = new ArrayList<>();
         if (isSelectOperation()==false) { return list; }
-        if (join != null && join.get("@outerJoin") != null) {
-            JSONArray stms = join.getJSONArray("@outerJoin");
-            for (int i = 0; i < stms.size(); i++) {
-                if (stms.get(i) instanceof String) {
-                    String joinStr = (String) stms.get(i);
-                    if (joinStr.matches("\\w+\\.\\w+\\s?=\\s?\\w+\\.\\w+")) {
-                        //table1.column1 = table2.column2
-                        String[] tcs = joinStr.replaceAll("\\s", "").split("=");
-//                            String leftTable = tcs[0].split("\\.")[0];
-//                            String rightTable = tcs[1].split("\\.")[0];
-                        validateTable(tcs[0].split("\\.")[0]);
-                        list.add(tcs[0].split("\\.")[0] + " ON " + joinStr);
+        JSONArray stms = join.get(joinType)!= null? join.getJSONArray(joinType):new JSONArray();
+        for (int i = 0; i < stms.size(); i++) {
+            if (stms.get(i) instanceof String) {
+                String joinStr = (String) stms.get(i);
+                if (joinStr.matches("\\w+\\.\\w+\\s?=\\s?\\w+\\.\\w+")) {
+                    String[] tcs = joinStr.replaceAll("\\s", "").split("=");
+                    String tableName = tcs[0].split("\\.")[0];
+                    validateTable(tableName);
+                    if (aliasNameMap.get(tableName)!=null && tableName.equals(aliasNameMap.get(tableName))==false) {
+                        list.add(aliasNameMap.get(tableName) + " "+ tableName + " ON " + joinStr);
                     } else {
-                        throw new RuntimeException("@outerJoin的格式必须是：table1.column1 = table2.column2,相当于OUTER JOIN table1 ON table1.column1=table2.column2");
+                        list.add(tableName + " ON " + joinStr);
                     }
                 } else {
-                    throw new RuntimeException("@outerJoin的类型必须是String类型，填写的值如：table1.column1 = table2.column2,相当于OUTER JOIN table1 ON table1.column1=table2.column2。注意：表有别名的应该写表别名");
+                    throw new RuntimeException(joinType+"的格式必须是：table1.column1 = table2.column2,相当于"+tableJoinConvertMap.get(joinType)+" table1 ON table1.column1=table2.column2");
                 }
+            } else {
+                throw new RuntimeException(joinType+"的类型必须是String类型，填写的值如：table1.column1 = table2.column2,相当于"+tableJoinConvertMap.get(joinType)+" table1 ON table1.column1=table2.column2。注意：表有别名的应该写表别名");
             }
         }
         return list;
