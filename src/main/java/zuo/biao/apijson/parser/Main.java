@@ -1,13 +1,16 @@
 package zuo.biao.apijson.parser;
 
 import com.alibaba.fastjson.JSONObject;
+import net.sf.jsqlparser.JSQLParserException;
+import net.sf.jsqlparser.parser.CCJSqlParserUtil;
+import net.sf.jsqlparser.statement.Statement;
 import zuo.biao.apijson.parser.core.APIJSONProvider;
 import zuo.biao.apijson.parser.core.SQLExplorer;
 import zuo.biao.apijson.parser.core.SQLProviderException;
 import zuo.biao.apijson.parser.core.StatementType;
 
 public class Main {
-    public static void main(String[] args) {
+    public static void main(String[] args) throws JSQLParserException {
 
 //        String json = "{\n" +
 //                "    \"[]\": { \n" +
@@ -74,7 +77,7 @@ public class Main {
         SQLExplorer builder = new SQLExplorer(apijsonProvider);
         System.out.println(builder.getSQL());
 
-
+        Statement statement = CCJSqlParserUtil.parse(builder.getSQL());
         System.out.println("\n\n\n\n");
 
 
